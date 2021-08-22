@@ -39,7 +39,7 @@ y = c(2, 2, -3, 1, -99, -10, 10, -7)
 
 + Calcule la media, la varianza, la raíz cuadrada y la desviación estándar de `y`.
 
-```{r}
+```{r, warning=FALSE}
 #media
 mean(y)
 #varianza
@@ -51,7 +51,7 @@ sd(y)
 ```
 +  Calcule la media, la varianza, la raíz cuadrada y la desviación estándar de `x`
 
-```{r}
+```{r, warning=FALSE}
 #media
 mean(x)
 #varianza
@@ -104,10 +104,15 @@ A[1:4,2] # Extraigo de todas las filas la columna 2
 A[3,3] # Extraigo de la fila 3 la col 3
 A[11] #extraigo el indice 11avo de la matriz
 A[20] #extraigo la entrada 20 de la matriz pero esta no existe y me devuelve NA
-A[5,4] # extraigo la fila 5 col 4 pero no existe pues solo hay 4 filas, me devuelve NA
-A[1,1,1] # el tercer indice es incorrecto para A
 
 ```
+```{r, eval=FALSE}
+A[5,4] # extraigo la fila 5 col 4 pero no existe pues solo hay 4 filas, me devuelve NA
+
+A[1,1,1] # el tercer indice es incorrecto para A
+```
+
+
 # 3. Investigue para qué sirven los comandos de R `as.matrix(...)` y `as.data.frame(...)`, explique y dé un ejemplo de cada uno.
 
  + `as.matrix()` cambiar el argumento ingresado en una matriz
@@ -191,14 +196,16 @@ Datos[,c(1,2)]
 ## Ejecute un `summary` y un `str` de los datos.
 
 ```{r}
+
 summary(Datos)
 
 str(Datos)
+
 ```
 
 ## Calcule la Media y la Desviación Estándar para todas las variables cualesquiera.
 
-```{r}
+```{r,warning=FALSE}
 
 lapply(Datos, mean)
 
@@ -249,6 +256,8 @@ datos[,c(1:3)]
 ## Ejecute un `summary` y un `str` de los datos.
 
 ```{r}
+summary(datos)
+
 str(datos)
 ```
 
@@ -270,7 +279,8 @@ lapply(num.datos, sum)
 ## Calcule para todas las variables cuantitativas presentes en el archivo `SAheart.csv`: El mínimo, el máximo, la media, la mediana y para la variables `chd` determine la cantidad de Si y de No.
 
 ```{r}
-summary(datos)
+summary(datos)[,c(5,10)]
+summary(datos)[c(1,3,4,6),c(1,2,3,4,6,7,8,9)]
 ```
 # 8. Programe en R una función que genera 200 números al azar entre 1 y 500 y luego calcula cuántos están entre el 50 y 450, ambos inclusive.
 
@@ -395,7 +405,7 @@ columnas(alumnos,1,2)
 
 \begin{equation}
 
-$U(n)$ = 
+U(n) = 
   \begin{cases}
             5 & \text{si $n = 0$} \\
             -5 & \text{si $n =1$} \\
@@ -443,7 +453,7 @@ collatz <- function(x){
     }
   }
   
-  cat("Las repeticiones necesarias fueron", i)
+  cat("Las repeticiones necesarias fueron", i, "\n")
   
 }
 
@@ -461,32 +471,61 @@ collatz(31)
 ```{r}
 es.factor <- function(n,f){
   if(n%%f == 0){
-    return(1)
+    return(f)
   } else {
     return(0)
   }
 }
-es.factor(4,3)
+
 ```
 
 ## b) `suma.factores`: Obtiene la suma de los factores de un número. Debe programarla con recursión.
 
 ```{r}
-suma.factores 
 
-  sec <- seq(1:10)
-  suma <- 0
-    
-  if(es.factor(i) == 1){
-      
-  suma <- suma + i
-     
-  }
 
+
+suma.factores <- function(n){
+  aux <- function(n,m){
+    if(n==1){
+      return(1)
+    } else {
+      return(es.factor(m,n) + aux(n-1,m))
+    }
+ }
+  return(aux(n-1,n))
+}
+
+suma.factores(9)
 ```
 
 
 ## c) clasificación: Retorne uno de los siguientes tres símbolos: __'perfecto__, __'defectivo__ o __'abundante.__
+
+```{r}
+clasificacion <- function(n){
+  
+  total <- suma.factores(n)
+  
+  if(total==n){
+    
+    cat("El número",n,"es perfecto", "\n")
+  
+    } else if(total > n){
+    
+    cat("El número",n,"es abundante", "\n")
+
+  } else{
+    
+    cat("El número",n,"es defectivo","\n")
+
+  }
+}
+
+clasificacion(10)
+clasificacion(6)
+clasificacion(12)
+```
 
 
 
