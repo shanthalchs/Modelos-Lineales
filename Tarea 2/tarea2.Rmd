@@ -1,0 +1,169 @@
+---
+title: "Tarea 2 Modelos Lineales"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    df_print: paged 
+    highlight: kate
+    toc: TRUE
+    toc_float: TRUE
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+
+```
+
+```{r}
+# Residual Sum of Square (RSS)
+RSS <- function(Pred,Real) {
+  ss <- sum((Real-Pred)^2)
+  return(ss)
+}
+
+RSE<-function(Pred,Real,NumPred) {
+  N<-length(Real)-NumPred-1  # <- length(Real)-(NumPred+1)
+  ss<-sqrt((1/N)*RSS(Pred,Real))
+  return(ss)
+}
+
+MSE <- function(Pred,Real) {
+  N<-length(Real)
+  ss<-(1/N)*RSS(Pred,Real)
+  return(ss)
+}
+
+error.relativo <- function(Pred,Real) {
+  ss<-sum(abs(Real-Pred))/sum(abs(Real))
+  return(ss)
+}
+
+# Funciones para desplegar precisión
+indices.precision <- function(real, prediccion,cantidad.variables.predictoras) {
+  return(list(error.cuadratico = MSE(prediccion,real),
+              raiz.error.cuadratico = RSE(prediccion,real,cantidad.variables.predictoras),
+              error.relativo = error.relativo(prediccion,real),
+              correlacion = as.numeric(cor(prediccion,real))))
+}
+
+
+# Gráfico de dispersión entre el valor real de la variable a predecir y la predicción del modelo.
+plot.real.prediccion <- function(real, prediccion, modelo = "") {
+  g <- ggplot(data = data.frame(Real = real, Prediccion = as.numeric(prediccion)), mapping = aes(x = Real, y = Prediccion)) +
+    geom_point(size = 1, col = "dodgerblue3") +
+    labs(title = paste0("Real vs Predicción", ifelse(modelo == "", "", paste(", con", modelo))),
+         x = "Real",
+         y = "Predicción")
+  return(g)
+}
+
+```
+
+
+# Pregunta 3: En este ejercicio usaremos la tabla de datos que viene en el archivo Uso `Bicicletas.csv`. Este es un conjunto de datos de usuarios de la empresa de alquiler de bicicletas por horas *Capital Bike* en Washington D.C. Las columnas de la tabla de datos son:
+
+
+## 1. Cargue la tabla de datos en `R`. Asegúrese de codificar adecuadamente las variables y de ignorar la columna `Fecha`. Además asegúrese de seleccionar la variable `TotalUsuarios` como la variable a predecir. Use para entrenar el modelo el 80 % de los datos.
+
+```{r}
+
+datos <- read.table("Datos/Uso_Bicicletas.csv",sep = ",", dec = ".", header = T)[,-1]
+
+numero.predictoras <- dim(datos)[2] - 1
+numero.filas <- dim(datos)[1]
+muestra <- sample(1:numero.filas,numero.filas*0.2)
+datos.aprendizaje <- datos[-muestra, ]
+datos.prueba <- datos[muestra, ]
+
+```
+
+## 2. Calcule el resumen numérico para la variable a predecir y explique el promedio.
+
+```{r}
+
+summary(datos)
+
+```
+## 3. Grafique la matriz de correlación e interprete la correlación entre las variables `TotalUsuarios` y `UsuariosRegistardos`
+
+```{r, fig.height=6, fig.width=6}
+library(corrplot)
+matriz.correlacion<-cor(datos)
+corrplot(matriz.correlacion)
+```
+
+## 4. Ejecute la Regresión Lineal, observe que los coeficientes de `UsuariosRegistrados` = 0.999999999999999 y `UsuariosCasuales` = 0.999999999999998 son distintos de cero (son prácticamente 1) y los coeficientes de las demás variables son casi 0, ¿Qué significa esto?
+
+```{r}
+modelo.lm <- lm(TotalUsuarios~., data = datos.aprendizaje)
+modelo.lm
+```
+## 5. ¿Qué relación observa entre las variables `UsuariosRegistrados` y `UsuariosCasuales` con respecto a la variable a predecir `TotalUsuarios`? Esto implica que las variables `UsuariosRegistrados` y `UsuariosCasuales` deben ser ignoradas en la construcción de la regresión ¿Por qué?
+
+```{r}
+
+
+
+```
+
+## 6. Ejecute nuevamente una Regresión Lineal, pero esta vez elimine (ignore) desde `R` las variables `UsuariosRegistrados` y `UsuariosCasuales` y usando el valor absoluto de los coeficientes β determine cuáles son las 3 variables que mayor importancia tienen en la regresión.
+
+```{r}
+modelo.lm <- lm(TotalUsuarios~., data = datos.aprendizaje[,-c(11,12)])
+modelo.lm
+```
+## 7. Para la Regresión Lineal del item 6 interprete la Raíz Error Cuadrático Medio y el Error Relativo.
+
+```{r}
+# Hace la Predicción
+prediccion <- predict(modelo.lm, datos.prueba)
+# Medición de precisión
+pre.lm <- indices.precision(datos.prueba$TotalUsuarios, prediccion,numero.predictoras)
+pre.lm
+```
+
+## 8. Para la Regresión Lineal del item 6, según la correlación entre la predicción y la variable a predecir, ¿son buenas o no las predicciones de esta regresión.
+
+```{r}
+
+```
+
+
+## 9. Corra un modelo de regresión Penalizada tipo Lasso. ¿Por qué se puede decir que prácticamente el resultado es el mismo que el de la Regresión Lineal? Justifique usando el gráfico __Coeficientes__ y __lambda__ y con base en los __Coeficientes__ β.
+
+```{r}
+library(glmnet)
+
+y <- datos$TotalUsuarios
+x<-model.matrix(TotalUsuarios~.,datos)[,-1]
+lasso.mod <- glmnet(x,y,alpha =1)
+lasso.mod
+```
+
+
+### Coeficientes
+
+```{r}
+coef(lasso.mod)
+
+```
+### Lambda 
+
+```{r}
+lasso.mod$lambda
+```
+
