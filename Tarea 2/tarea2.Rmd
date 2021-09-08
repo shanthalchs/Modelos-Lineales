@@ -80,14 +80,21 @@ plot.real.prediccion <- function(real, prediccion, modelo = "") {
 ## 1. Cargue la tabla de datos en `R`. Asegúrese de codificar adecuadamente las variables y de ignorar la columna `Fecha`. Además asegúrese de seleccionar la variable `TotalUsuarios` como la variable a predecir. Use para entrenar el modelo el 80 % de los datos.
 
 ```{r}
-
+library(fastDummies)
 datos <- read.table("Datos/Uso_Bicicletas.csv",sep = ",", dec = ".", header = T)[,-1]
 
+#Convierto a dummies
+datos <- dummy_cols(datos, select_columns = c("Estacion","Feriado","DiaSemana","DiaTrabajo","TipoClima"),remove_selected_columns = T)
+
 numero.predictoras <- dim(datos)[2] - 1
+
 numero.filas <- dim(datos)[1]
+
 muestra <- sample(1:numero.filas,numero.filas*0.2)
 datos.aprendizaje <- datos[-muestra, ]
 datos.prueba <- datos[muestra, ]
+
+x<-model.matrix(TotalUsuarios~.,datos)[,-1]
 
 ```
 
@@ -95,16 +102,21 @@ datos.prueba <- datos[muestra, ]
 
 ```{r}
 
-summary(datos)
+summary(datos$TotalUsuarios)
 
 ```
+En promedio estan alquilando 189 (o 190 redondeado) personas por día bicicletas
+
 ## 3. Grafique la matriz de correlación e interprete la correlación entre las variables `TotalUsuarios` y `UsuariosRegistardos`
 
 ```{r, fig.height=6, fig.width=6}
 library(corrplot)
 matriz.correlacion<-cor(datos)
 corrplot(matriz.correlacion)
+
+
 ```
+No se puede apreciar el valor exacto, sin embargo se observa que tienen una correlación positiva y fuerte.
 
 ## 4. Ejecute la Regresión Lineal, observe que los coeficientes de `UsuariosRegistrados` = 0.999999999999999 y `UsuariosCasuales` = 0.999999999999998 son distintos de cero (son prácticamente 1) y los coeficientes de las demás variables son casi 0, ¿Qué significa esto?
 
@@ -112,20 +124,20 @@ corrplot(matriz.correlacion)
 modelo.lm <- lm(TotalUsuarios~., data = datos.aprendizaje)
 modelo.lm
 ```
+Estas dos variables son las que contribuyen modelo mejor.
+
 ## 5. ¿Qué relación observa entre las variables `UsuariosRegistrados` y `UsuariosCasuales` con respecto a la variable a predecir `TotalUsuarios`? Esto implica que las variables `UsuariosRegistrados` y `UsuariosCasuales` deben ser ignoradas en la construcción de la regresión ¿Por qué?
 
-```{r}
-
-
-
-```
+Su relación es fuerte con la bariable a predecir. 
 
 ## 6. Ejecute nuevamente una Regresión Lineal, pero esta vez elimine (ignore) desde `R` las variables `UsuariosRegistrados` y `UsuariosCasuales` y usando el valor absoluto de los coeficientes β determine cuáles son las 3 variables que mayor importancia tienen en la regresión.
 
 ```{r}
-modelo.lm <- lm(TotalUsuarios~., data = datos.aprendizaje[,-c(11,12)])
-modelo.lm
+modelo.lm <- lm(TotalUsuarios~., data = datos.aprendizaje[,-c(6,7)])
+summary(modelo.lm)
 ```
+Feriado_0, Estacion_3 y la Hora o Humedad
+
 ## 7. Para la Regresión Lineal del item 6 interprete la Raíz Error Cuadrático Medio y el Error Relativo.
 
 ```{r}
@@ -155,15 +167,47 @@ lasso.mod
 ```
 
 
-### Coeficientes
+### Coeficientes lambda
 
 ```{r}
-coef(lasso.mod)
+plot(lasso.mod,"lambda", label=TRUE)
 
 ```
-### Lambda 
+### Beta
 
 ```{r}
-lasso.mod$lambda
+coef(lasso.mod)[,5]
+```
+
+## 10. Para la Penalizada Lasso del item anterior seleccione __Mejor Lambda Log(x)__ = igual a 3. ¿Cuántos __Coeficientes__ β se anulan? Observe que la correlación entre la predicción y la variable a predecir son casi iguales que en el caso de la Regresión Lineal, con base en esta observación ¿cuál modelo prefiere la Regresión Lineal o la Regresión Lasso (con log(λ) = 3), justifique su respuesta. __Nota__: Debido a los procesos de optimización que se ejecutan dentro del método Lasso dos ejecuciones de este item podrían dar diferente, además podría causar que en alguna de las ejecuciones no se anule ningún β (coeficiente).
+
+```{r, fig.width=12, fig.height=6}
+# Usando validación cruzada para determinar el mejor Lambda
+#x del testing
+x.datos.prueba<-model.matrix(TotalUsuarios~.,datos.prueba)[,-1]
+sal.cv<-cv.glmnet(x,y,alpha=1)
+plot(sal.cv)
+mejor.lambda<-sal.cv$lambda.min
+mejor.lambda
+log(mejor.lambda)
+```
+```{r}
+coef(lasso.mod)[,which(lasso.mod$lambda==mejor.lambda)]
+```
+se anulan 10 betas
+
+```{r}
+pred<-predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba)
+# Medición de precisión
+numero.predictoras<- dim(datos)[2]-1
+numero.predictoras
+pre.lasso <- indices.precision(datos.prueba$TotalUsuarios,pred,numero.predictoras)
+pre.lasso
+```
+## 11. Corra un modelo de regresión Penalizada tipo Ridge con __Mejor Lambda Log(x)__ = que sugiere el método. ¿Qué se puede concluir con base en la correlación entre la predicción y la variable a predecir?
+
+```{r}
+x<-model.matrix(TotalUsuarios~.,datos)[,-1]
+head(x)
 ```
 
