@@ -83,9 +83,6 @@ plot.real.prediccion <- function(real, prediccion, modelo = "") {
 library(fastDummies)
 datos <- read.table("Datos/Uso_Bicicletas.csv",sep = ",", dec = ".", header = T)[,-1]
 
-#Convierto a dummies
-datos <- dummy_cols(datos, select_columns = c("Estacion","Feriado","DiaSemana","DiaTrabajo","TipoClima"),remove_selected_columns = T)
-
 numero.predictoras <- dim(datos)[2] - 1
 
 numero.filas <- dim(datos)[1]
@@ -109,14 +106,18 @@ En promedio estan alquilando 189 (o 190 redondeado) personas por día bicicletas
 
 ## 3. Grafique la matriz de correlación e interprete la correlación entre las variables `TotalUsuarios` y `UsuariosRegistardos`
 
-```{r, fig.height=6, fig.width=6}
+```{r}
 library(corrplot)
 matriz.correlacion<-cor(datos)
-corrplot(matriz.correlacion)
 
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(matriz.correlacion, method="shade", shade.col=NA, tl.col="black", tl.srt=45,
+col=col(200), addCoef.col="black", order="AOE")
+library("ggplot2")   
 
 ```
-No se puede apreciar el valor exacto, sin embargo se observa que tienen una correlación positiva y fuerte.
+La correlación es de 0.97, por lo tanto tiene una correlación positiva y fuerte.
 
 ## 4. Ejecute la Regresión Lineal, observe que los coeficientes de `UsuariosRegistrados` = 0.999999999999999 y `UsuariosCasuales` = 0.999999999999998 son distintos de cero (son prácticamente 1) y los coeficientes de las demás variables son casi 0, ¿Qué significa esto?
 
@@ -124,19 +125,20 @@ No se puede apreciar el valor exacto, sin embargo se observa que tienen una corr
 modelo.lm <- lm(TotalUsuarios~., data = datos.aprendizaje)
 modelo.lm
 ```
-Estas dos variables son las que contribuyen modelo mejor.
+Estas dos variables son las que contribuyen modelo mejor y las demás no aportan nada a la predicción.
 
 ## 5. ¿Qué relación observa entre las variables `UsuariosRegistrados` y `UsuariosCasuales` con respecto a la variable a predecir `TotalUsuarios`? Esto implica que las variables `UsuariosRegistrados` y `UsuariosCasuales` deben ser ignoradas en la construcción de la regresión ¿Por qué?
 
-Su relación es fuerte con la bariable a predecir. 
+Su relación es fuerte con la variable a predecir podría indicar debido a su aporte en el modelo que son practicamente lo mismo que TotalUsuarios. 
 
 ## 6. Ejecute nuevamente una Regresión Lineal, pero esta vez elimine (ignore) desde `R` las variables `UsuariosRegistrados` y `UsuariosCasuales` y usando el valor absoluto de los coeficientes β determine cuáles son las 3 variables que mayor importancia tienen en la regresión.
 
 ```{r}
-modelo.lm <- lm(TotalUsuarios~., data = datos.aprendizaje[,-c(6,7)])
+modelo.lm <- lm(TotalUsuarios~., data = datos.aprendizaje[,-c(12,11)])
 summary(modelo.lm)
+coef(modelo.lm)
 ```
-Feriado_0, Estacion_3 y la Hora o Humedad
+Feriado, Hora y TipoClima
 
 ## 7. Para la Regresión Lineal del item 6 interprete la Raíz Error Cuadrático Medio y el Error Relativo.
 
@@ -147,13 +149,13 @@ prediccion <- predict(modelo.lm, datos.prueba)
 pre.lm <- indices.precision(datos.prueba$TotalUsuarios, prediccion,numero.predictoras)
 pre.lm
 ```
+El promedio de los errores es de 148.53 para todas las varibles.
+
+Además en promedio el modelo se equivocó un 56% del valor real.
 
 ## 8. Para la Regresión Lineal del item 6, según la correlación entre la predicción y la variable a predecir, ¿son buenas o no las predicciones de esta regresión.
 
-```{r}
-
-```
-
+La correlación es de 57.64% en un modelo de calidad baja. Ya que los valores de los errores son muy altos.
 
 ## 9. Corra un modelo de regresión Penalizada tipo Lasso. ¿Por qué se puede decir que prácticamente el resultado es el mismo que el de la Regresión Lineal? Justifique usando el gráfico __Coeficientes__ y __lambda__ y con base en los __Coeficientes__ β.
 
@@ -163,9 +165,7 @@ library(glmnet)
 y <- datos$TotalUsuarios
 x<-model.matrix(TotalUsuarios~.,datos)[,-1]
 lasso.mod <- glmnet(x,y,alpha =1)
-lasso.mod
 ```
-
 
 ### Coeficientes lambda
 
@@ -173,11 +173,49 @@ lasso.mod
 plot(lasso.mod,"lambda", label=TRUE)
 
 ```
+
 ### Beta
 
 ```{r}
 coef(lasso.mod)[,5]
 ```
+```{r}
+
+x<- model.matrix(TotalUsuarios~.,datos)[,-1]
+y<-datos$TotalUsuarios
+
+options(max.print = 2000,width=2000)
+
+
+# Usando validación cruzada para determinar el mejor Lambda
+sal.cv<-cv.glmnet(x,y,alpha=0)
+
+# Construye el Modelo LASSO
+lasso.mod<-glmnet(x,y,alpha=1)
+
+
+x.datos.prueba<-model.matrix(TotalUsuarios~.,datos.prueba)[,-1]
+
+mejor.lambda<-sal.cv$lambda.min
+mejor.lambda
+coef(lasso.mod)[,which(lasso.mod$lambda==mejor.lambda)]
+
+pred1<-predict(lasso.mod,newx=x.datos.prueba,type = "coefficients")
+
+pred<-predict(lasso.mod,newx=x.datos.prueba)
+
+numero.predictoras <- dim(datos)[2] - 1
+
+numero.filas <- dim(datos)[1]
+
+
+indices.calidad <- indices.precision(datos.prueba$TotalUsuarios,pred,numero.predictoras)
+indices.calidad
+
+pred1
+```
+
+Yo creería que al no elegir el lambda manualmente este utiliza uno por default y de esta forma vuelve a utilizar las variables `UsuariosCasuales` y `UsuariosRegistrados` para el modelo.
 
 ## 10. Para la Penalizada Lasso del item anterior seleccione __Mejor Lambda Log(x)__ = igual a 3. ¿Cuántos __Coeficientes__ β se anulan? Observe que la correlación entre la predicción y la variable a predecir son casi iguales que en el caso de la Regresión Lineal, con base en esta observación ¿cuál modelo prefiere la Regresión Lineal o la Regresión Lasso (con log(λ) = 3), justifique su respuesta. __Nota__: Debido a los procesos de optimización que se ejecutan dentro del método Lasso dos ejecuciones de este item podrían dar diferente, además podría causar que en alguna de las ejecuciones no se anule ningún β (coeficiente).
 
@@ -186,28 +224,272 @@ coef(lasso.mod)[,5]
 #x del testing
 x.datos.prueba<-model.matrix(TotalUsuarios~.,datos.prueba)[,-1]
 sal.cv<-cv.glmnet(x,y,alpha=1)
-plot(sal.cv)
-mejor.lambda<-sal.cv$lambda.min
-mejor.lambda
-log(mejor.lambda)
+
+mejor.lambda<-3
+
 ```
-```{r}
-coef(lasso.mod)[,which(lasso.mod$lambda==mejor.lambda)]
-```
-se anulan 10 betas
+
+
 
 ```{r}
+pred1 <- predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba,type = "coefficients")
 pred<-predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba)
 # Medición de precisión
 numero.predictoras<- dim(datos)[2]-1
 numero.predictoras
 pre.lasso <- indices.precision(datos.prueba$TotalUsuarios,pred,numero.predictoras)
 pre.lasso
+
+pred1
 ```
+Nuevamente se anularon todas las variables excepto UsuariosCasuales y UsuariosResgistrados, preferiría LASSO debido a que utiliza menos variables y tiene una correlación más alta.
+
 ## 11. Corra un modelo de regresión Penalizada tipo Ridge con __Mejor Lambda Log(x)__ = que sugiere el método. ¿Qué se puede concluir con base en la correlación entre la predicción y la variable a predecir?
 
 ```{r}
 x<-model.matrix(TotalUsuarios~.,datos)[,-1]
-head(x)
+
+ridge.mod<-glmnet(x,y,alpha=0)
+
+```
+
+```{r}
+sal.cv<-cv.glmnet(x,y,alpha=0)
+
+mejor.lambda<-sal.cv$lambda.min
+
+coef(ridge.mod)[,which(ridge.mod$lambda==mejor.lambda)]
+```
+
+```{r}
+pred1 <- predict(ridge.mod,s=mejor.lambda,newx=x.datos.prueba,type = "coefficients")
+pred<-predict(ridge.mod,s=mejor.lambda,newx=x.datos.prueba)
+# Factor de Multiplicación en la raíz del error cuadrático medio
+numero.predictoras <- dim(datos.prueba)[2]-1
+
+indices.calidad <- indices.precision(datos.prueba$TotalUsuarios,pred,numero.predictoras)
+indices.calidad
+```
+
+La correlación es del 99.86% lo que indica que es bastante alta. Sin emabargo no anula ninguna variable. Preferiría usar el mejor.lambda, es decir, el minimo.
+
+# Pregunta 4. Un cliente nos contrata para estudiar una posible oportunidad de negocio, y para ver si le es rentable quiere una predicción de las ventas potenciales de asientos de niños para autos en su tienda. Para ello hacemos uso de los datos `AsientosNinno.csv` los cuales contienen detalles de ventas de asientos de niños para auto en una serie de tiendas similares a las del cliente; y además los datos incluyen variables que definen características de la tienda y su localidad. La tabla de datos está formada por 400 filas y 13 columnas. Seguidamente se explican las variables que conforman la tabla.
+
+Realice lo siguiente:
+
+## 1. Cargue la tabla de datos en `R`. Asegure de que todas las variables categóricas que tiene esta tabla queden codificadas de forma adecuada (es decir, que `R` las esté interpretando como variables categóricas). Para medir el error tome un 25 % de la tabla de datos como tabla de testing.
+
+```{r}
+library(fastDummies)
+datos <- read.table("Datos/AsientosNinno.csv", sep = ";", dec = ".", header = T)[,-1]
+
+
+numero.columnas <- dim(datos)[2]
+numero.filas <- dim(datos)[1]
+muestra <- sample(1:numero.filas,numero.filas*0.25)
+datos.aprendizaje <- datos[-muestra, ]
+datos.prueba <- datos[muestra, ]
+```
+
+## 2. Según el gráfico de __Correlación__ ¿cuál es la variable que mejor correlaciona con la variable a predecir?
+
+```{r}
+library(corrplot)
+datos2 <- datos[,-8]
+matriz.correlacion<-cor(datos2)
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(matriz.correlacion, method="shade", shade.col=NA, tl.col="black", tl.srt=45,
+col=col(200), addCoef.col="black", order="AOE")
+library("ggplot2")    
+```
+
+La variable que se relaciona mejor con la variable a predecir es `Precio`, seguido de `Publicidad` y después `Edad`.
+
+## 3. Ejecute una Regresión Lineal y usando el valor absoluto de los coeficientes β determine cuáles son las 5 variables que mayor importancia tienen en la regresión. ¿Está la variables que tenía mayor poder predictivo según los dos ejercicios anteriores?
+
+```{r}
+modelo.lm <- lm(Ventas~., data = datos)
+
+#betas
+coef(modelo.lm)
+
+numero.predictoras <- dim(datos)[2] - 1
+
+numero.filas <- dim(datos)[1]
+
+pred <- predict(modelo.lm,datos.prueba)
+
+indices.calidad <- indices.precision(datos.prueba$Ventas,pred,numero.predictoras)
+indices.calidad
+
+
+```
+
+Las 5 mejores variables según el modelo son `CalidadEstantBueno`, `CalidadEstantMedio`, `CercaniaEsc`, `Desarrollo` y `Publicidad`.
+
+## 4. Corra un modelo de Regresión Penalizada tipo Lasso ¿Cuáles variables se anulan y por qué? ¿Cuál modelo prefiere Regresión Lineal o Lasso? Según lo anterior y basado en los índices de calidad de ambos métodos, justifique su respuesta. Nota: Debido a los procesos de optimización que se ejecutan dentro del método Lasso dos ejecuciones de este item podrían dar diferente, además podría causar que en alguna de las ejecuciones no se anule ningún β (coeficiente).
+
+```{r}
+library(glmnet)
+
+x<- model.matrix(Ventas~.,datos)[,-1]
+y<-datos$Ventas
+
+options(max.print = 2000,width=2000)
+
+
+# Usando validación cruzada para determinar el mejor Lambda
+sal.cv<-cv.glmnet(x,y,alpha=0)
+
+# Construye el Modelo LASSO
+lasso.mod<-glmnet(x,y,alpha=1)
+
+
+x.datos.prueba<-model.matrix(Ventas~.,datos.prueba)[,-1]
+
+mejor.lambda<-sal.cv$lambda.min
+mejor.lambda
+coef(lasso.mod)[,which(lasso.mod$lambda==mejor.lambda)]
+
+pred1<-predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba,type = "coefficients")
+
+pred<-predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba)
+
+numero.predictoras <- dim(datos)[2] - 1
+
+numero.filas <- dim(datos)[1]
+
+
+indices.calidad <- indices.precision(datos.prueba$Ventas,pred,numero.predictoras)
+indices.calidad
+
+pred1
+```
+Se anularon 6 variables.
+
+La correlación de Regresión Lineal es mayor por poco, pero la cantidad de variables que utiliza LASSO es menor, por esto la interpretabilidad es más sencilla. Prefiero el modelo de LASSO.
+
+
+## 5. Observe que las variables `CalidadEstant`, `Urbano` y `USA`, a pesar de ser variables categóricas, aparecen en los resultados de la regresión e incluso tienen coeficientes β asociados. Esto se debe a que internamente `R` automáticamente las convierte en Códigos Disyuntivos Completos (Variables Dummies). `R` las codifica como `Urbano1` y `USA1` dado que son variables dicotómicas por lo que basta ver la categoría 1 (la categoría 0 es completamente complementaria).
+
+
+## 6. En el caso de la variable `CalidadEstant` `R` también automáticamente la convierte en Códigos Disyuntivos Completos (Variables Dummies), solo aparecen las modalidades `CantidadEstantMalo` y `CantidadEstantMedio` porque la tercera categoría Bueno es complementaria a las dos anteriores.
+¿Qué sucede si en `R` forzamos a la variable `CantidadEstant` a ser variable Código Disyuntivo Completo (Dummy)? Nótese que en R cuando se recodifica una variable hay que generar de nuevo las tablas de training-testing.
+
+```{r}
+#dummy las categoricas no ordinales
+datos <- dummy_cols(datos, select_columns = c("CalidadEstant"),remove_selected_columns = T)
+
+#factor las categoricas ordinales
+#datos$CalidadEstant <- factor(datos$CalidadEstant, levels = #c("Malo","Medio","Bueno"))
+
+numero.columnas <- dim(datos)[2]
+numero.filas <- dim(datos)[1]
+muestra <- sample(1:numero.filas,numero.filas*0.25)
+datos.aprendizaje <- datos[-muestra, ]
+datos.prueba <- datos[muestra, ]
+
+x<-model.matrix(Ventas~.,datos)[,-1]
+y<-datos$Ventas
+
+options(max.print = 2000,width=2000)
+# Construye el Modelo LASSO
+lasso.mod<-glmnet(x,y,alpha=1)
+coef(lasso.mod)
+
+x.datos.prueba<-model.matrix(Ventas~.,datos.prueba)[,-1]
+# Usando validación cruzada para determinar el mejor Lambda
+sal.cv<-cv.glmnet(x,y,alpha=0)
+
+mejor.lambda<-sal.cv$lambda.min
+mejor.lambda
+coef(lasso.mod)[,which(lasso.mod$lambda==mejor.lambda)]
+pred<-predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba)
+
+numero.predictoras <- dim(datos)[2] - 1
+
+
+indices.calidad <- indices.precision(datos.prueba$Ventas,pred,numero.predictoras)
+indices.calidad
+```
+
+Parece que la función la igual la toma como variable disyuntiva de ambas formas. No hubo mucha diferencia en los índices de precisión, solo disminuyó la correlación un poco.
+
+# Pregunta 5
+
+## 1. Programe en __R__ una función `lm2(...)` que recibe como parámetro una tabla de aprendizaje y retorna un modelo de Regresión Lineal, es decir, calcula y retorna $β = (X^tX)^{−1}X^ty$.
+
+```{r}
+lm2 <- function(y,X){
+
+    b = base::solve(t(X)%*%X) %*% t(X) %*% y 
+    
+  return(b)
+}
+
+
+```
+
+
+## 2. Programe en __R__ una función `predict2(...)` que recibe como parámetro el modelo construido en la pregunta anterior, una tabla de testing de modo tal que retorna la predicción para esta tabla de testing.
+
+```{r}
+predict2 <- function(m,X){
+
+  resultado <- m*X
+  
+  return(resultado) 
+}
+
+```
+
+
+## 3. Usando la tabla de datos `uscrime.csv` compare los resultados de las funciones `lm(...)`, `lm2(...)`, `predict(...)` y `predict2(...)`.
+
+```{r}
+library(dummies)
+
+datos <-  read.table("Datos/SAheart.csv", sep = ";", dec = ".", header = T)
+
+datos$chd <- ifelse(datos$chd == "Si", 1,0)
+
+datosC <-  dummy.data.frame(datos, sep = ";")
+
+azar <- sample(1:nrow(datos), nrow(datos)*0.8)
+
+aprendizaje <- datosC[azar,]
+
+prueba <- datosC[-azar,]
+
+x <- as.matrix(Filter(is.numeric, datos[-c(10)]))
+
+y <- as.matrix(Filter(is.numeric, datos[10]))
+
+
+```
+
+### lm
+
+```{r}
+lm(formula = chd~., data = datosC)
+
+lm2(y,x)
+```
+
+### predict
+
+```{r}
+m <- lm2(y, x)
+
+predict2(m, Filter(is.numeric, prueba))
+
+```
+
+
+## 4. Usando la tabla de datos `uscrime.csv` y la función de __R__ denominada `system.time(...)` compare los tiempos de ejecución de las funciones `lm(...)`, `lm2(...)`, `predict(...)` y `predict2(...)`.
+
+```{r}
+system.time()
 ```
 
