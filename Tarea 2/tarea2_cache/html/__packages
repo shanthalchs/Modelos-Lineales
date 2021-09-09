@@ -1,0 +1,9 @@
+base
+knitr
+rmdformats
+fastDummies
+corrplot
+ggplot2
+Matrix
+glmnet
+dummies
