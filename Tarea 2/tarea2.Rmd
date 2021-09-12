@@ -421,11 +421,10 @@ Parece que la función la igual la toma como variable disyuntiva de ambas formas
 ## 1. Programe en __R__ una función `lm2(...)` que recibe como parámetro una tabla de aprendizaje y retorna un modelo de Regresión Lineal, es decir, calcula y retorna $β = (X^tX)^{−1}X^ty$.
 
 ```{r}
-lm2 <- function(y,X){
-
-    b = base::solve(t(X)%*%X) %*% t(X) %*% y 
-    
-  return(b)
+lm2 <- function(datos.training, y) {
+  X <- as.matrix(datos.training[-ncol(datos.training)])
+  X <- cbind(rep(1, length(y)), X)
+  return(solve(t(X) %*% X) %*% (t(X) %*% y))
 }
 
 
@@ -435,13 +434,11 @@ lm2 <- function(y,X){
 ## 2. Programe en __R__ una función `predict2(...)` que recibe como parámetro el modelo construido en la pregunta anterior, una tabla de testing de modo tal que retorna la predicción para esta tabla de testing.
 
 ```{r}
-predict2 <- function(m,X){
-
-  resultado <- m*X
-  
-  return(resultado) 
+predict2 <- function(modelo, tabla) {
+  tabla.predictoras <- ttesting[rownames(model2)[-1]]
+  table <- as.matrix(tabla.predictoras)
+  return(modelo[1] + table[,-103] %*% modelo[-1])
 }
-
 ```
 
 
@@ -450,39 +447,32 @@ predict2 <- function(m,X){
 ```{r}
 library(dummies)
 
-datos <-  read.table("Datos/SAheart.csv", sep = ";", dec = ".", header = T)
+datos <- read.table('Datos/uscrime.csv',header=TRUE, sep=',',dec='.')
 
-datos$chd <- ifelse(datos$chd == "Si", 1,0)
-
-datosC <-  dummy.data.frame(datos, sep = ";")
-
-azar <- sample(1:nrow(datos), nrow(datos)*0.8)
-
-aprendizaje <- datosC[azar,]
-
-prueba <- datosC[-azar,]
-
-x <- as.matrix(Filter(is.numeric, datos[-c(10)]))
-
-y <- as.matrix(Filter(is.numeric, datos[10]))
-
-
+cantidad.variables.predictoras <- dim(datos)[2] - 1
+cantidad.filas <- dim(datos)[1]
+datos.muestra <- sample(1:cantidad.filas,cantidad.filas*0.80)
+ttraining <- datos[datos.muestra,]
+ttesting <- datos[-datos.muestra,]
 ```
 
 ### lm
 
 ```{r}
-lm(formula = chd~., data = datosC)
+model2 <- lm2(ttraining, ttraining$ViolentCrimesPerPop)
+model1 <- lm(ViolentCrimesPerPop~., ttraining)
 
-lm2(y,x)
+data.frame(modelo.lm = model1$coefficients, modelo.lm2 = model2)
 ```
 
 ### predict
 
 ```{r}
-m <- lm2(y, x)
+predic2 <- predict2(model2, ttesting)
 
-predict2(m, Filter(is.numeric, prueba))
+predic1 <- predict(model1, ttesting)
+
+data.frame(predict = predic1, predict2 = predic2)
 
 ```
 
@@ -490,6 +480,9 @@ predict2(m, Filter(is.numeric, prueba))
 ## 4. Usando la tabla de datos `uscrime.csv` y la función de __R__ denominada `system.time(...)` compare los tiempos de ejecución de las funciones `lm(...)`, `lm2(...)`, `predict(...)` y `predict2(...)`.
 
 ```{r}
-system.time()
+time1 <- head(system.time(lm(ViolentCrimesPerPop~., ttraining)), 3)
+time2 <- head(system.time(lm2(ttraining, ttraining$ViolentCrimesPerPop)), 3)
+
+data.frame(Tiempo.lm = time1, Tiempo.lm2 = time2)
 ```
 
