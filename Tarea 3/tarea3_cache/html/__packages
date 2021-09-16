@@ -1,0 +1,11 @@
+base
+knitr
+rmdformats
+ggplot2
+dplyr
+traineR
+lattice
+caret
+corrplot
+Matrix
+glmnet
