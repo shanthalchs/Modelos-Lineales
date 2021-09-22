@@ -31,7 +31,7 @@ Parte II: 50 puntos. Entrega 22 de septiembre a las 18:00. Utilice `R` para real
 
 Suponga que un portafolio de pólizas tienen una frecuencia de reclamación que sigue una distribución $BN(2, 0.1)$. Cuando sucede un reclamo, el monto de la reclamación sigue una distribución logarítmica de parámetro $\theta = 0.46$.
 
-+ (15 puntos) Calcule la distribución exacta de $S$.
+#  (15 puntos) Calcule la distribución exacta de $S$.
 
 ```{r}
 library(actuar)
@@ -55,7 +55,7 @@ for (i in 1:100 ){
 v
 ```
 
-+ __(15 puntos)__ Obtenga esta misma distribución a través de las aproximaciones vistas en clase.
+# (15 puntos) Obtenga esta misma distribución a través de las aproximaciones vistas en clase.
 
 ```{r}
 library(Deriv)
@@ -112,10 +112,10 @@ mean.Logaritmica <- (-1/log(1-0.46))*(0.46/(1-0.46))
 mean.BNegativa <- (2*0.9)/0.1
 #Varianza
 var.Logaritmica <- (0.46^2 + 0.46*log(1-0.46))/(((1-0.46)^2)*(log(1-0.46)^2))
-varBNegativa <- (2*0.9)/(0.1^2)
+var.BNegativa <- (2*0.9)/(0.1^2)
 
-expS <- meanL*meanBN
-VaRS <- varBN*meanL^2 + varL*meanBN
+expS <- mean.Logaritmica*mean.BNegativa
+VaRS <- var.BNegativa*mean.Logaritmica^2 + var.Logaritmica*mean.BNegativa
 
 vv <- c()
 
@@ -127,6 +127,10 @@ for (i in 1:100){
 
 vv
 ```
+
+
+
+# (10 puntos) Determine cuál es la mejor.
 
 ```{r}
 library(ggplot2)
@@ -144,11 +148,9 @@ Aproximaciones
 
 ```
 
-+ (10 puntos) Determine cuál es la mejor.
-
 La mejor sería la aproximación de Edgeworth y la aproximación Normal es la peor
 
-+ (10 puntos) Comente el porqué del resultado anterior.
+# (10 puntos) Comente el porqué del resultado anterior.
 
 Para mí sería la Edgeworth debido a que se aproxima más a la exacta y a que utilizamos cuatro momentos de S, creo que conserva mejor la información que las demás.
 
