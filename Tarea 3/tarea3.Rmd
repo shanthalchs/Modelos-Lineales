@@ -1,0 +1,1008 @@
+---
+title: "Tarea 3 Modelos Lineales"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    df_print: paged 
+    highlight: kate
+    toc: TRUE
+    toc_float: TRUE
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+
+```
+
+```{r}
+# Residual Sum of Square (RSS)
+RSS <- function(Pred,Real) {
+  ss <- sum((Real-Pred)^2)
+  return(ss)
+}
+RSE<-function(Pred,Real,NumPred) {
+  N<-length(Real)-NumPred-1  # <- length(Real)-(NumPred+1)
+  ss<-sqrt((1/N)*RSS(Pred,Real))
+  return(ss)
+}
+MSE <- function(Pred,Real) {
+  N<-length(Real)
+  ss<-(1/N)*RSS(Pred,Real)
+  return(ss)
+}
+error.relativo <- function(Pred,Real) {
+  ss<-sum(abs(Real-Pred))/sum(abs(Real))
+  return(ss)
+}
+
+# Funciones para desplegar precisión
+indices.precision <- function(real, prediccion,cantidad.variables.predictoras) {
+  return(list(error.cuadratico = MSE(prediccion,real),
+              raiz.error.cuadratico = RSE(prediccion,real,cantidad.variables.predictoras),
+              error.relativo = error.relativo(prediccion,real),
+              correlacion = as.numeric(cor(prediccion,real))))
+}
+
+
+# Gráfico de dispersión entre el valor real de la variable a predecir y la predicción del modelo.
+plot.real.prediccion <- function(real, prediccion, modelo = "") {
+  g <- ggplot(data = data.frame(Real = real, Prediccion = as.numeric(prediccion)), mapping = aes(x = Real, y = Prediccion)) +
+    geom_point(size = 1, col = "dodgerblue3") +
+    labs(title = paste0("Real vs Predicción", ifelse(modelo == "", "", paste(", con", modelo))),
+         x = "Real",
+         y = "Predicción")
+  return(g)
+}
+```
+
+
+# Pregunta 1: __[10 puntos]__ Explique detalladamente la diferencia entre un problema de regresión y uno de clasificación. Basado en su experiencia laboral o académica comente 2 ejemplos de problemas de clasificación y 2 de regresión que conozca y la oportunidad que ve en resolverlos.
+
++ Clasificación: El objetivo de este es lograr predecir la __clase__ a la que pertenecen las observaciones. Este se intenta lograr con un modelo.
+
+1. Clasificar clientes como Deudores o No deudores.
+
+2. Clasificar movimientos banacarios como si fueren estafas o no estafas.
+
++ Regresión: El objetivo de un problema de regresión es primeramente con una variable a predecir númerica, a diferencia de un problema de clasificación, además busca encontrar una función que explique lo más posible el comportamiento de la variable a predecir para así poder dar pronósticos.
+
+1. Predicción de los valores de activos, como se devaluan.
+
+2. Cálculo de número de tarjetas bancarias vendidas y por vender. 
+
+
+# Pregunta 2: __[15 puntos]__
+
+## 1. Programe en lenguaje R una función que reciba como entrada la matriz de confusión (para el caso 2 × 2) que calcule y retorne en una lista: la Precisión Global, el Error Global, la Precisión Positiva (PP), la Precisión Negativa (PN), los Falsos Positivos (FP), los Falsos Negativos (FN), la Asertividad Positiva (AP) y la Asertividad Negativa (NP).
+
+```{r}
+Confusion <- function(MC){
+  VN <- MC[1,1]
+  FN <- MC[2,1]
+  VP <- MC[2,2]
+  FP <- MC[1,2]
+  
+  PG <- (VN + VP)/(VN + FP + FN + VP)
+  EG <- 1 - PG
+  PP <- VP/(FN + VP)
+  PN <- VN/(FP + VN)
+  FP <- FP/(VN + FP)
+  FN <- FN/(VP + FN)
+  AP <- VP/(FP + VP)
+  AN <- VN/(VN + FN)
+  
+  Respuesta <- list(PG = PG,EG = EG, PP = PP,PN = PN,FP = FP,FN=FN,AP=AP,AN=AN)
+  
+  names(Respuesta) <- c("Precision Global", "Error Global","Precision Positiva", "Precision Negativa", "Falsos Positivos", "Falsos Negativos", "Asertividad Positiva" , "Asertividad Negativa")
+  
+  return(Respuesta)
+}
+```
+
+## 2. Supongamos que tenemos un modelo predictivo para detectar Fraude en Tarjetas de Crédito, la variable a predecir es `Fraude` con dos posibles valores `Sí` (para el caso en que sí fue fraude) y `No` (para el caso en que no fue fraude). Supongamos la matriz de confusión es:
+
+\begin{tabularx}{0.8\textwidth} { 
+  | >{\raggedright\arraybackslash}X 
+  | >{\centering\arraybackslash}X 
+  | >{\raggedleft\arraybackslash}X | }
+ \hline
+  & `No` & `Si` \\
+ \hline
+ `No`  & 83254  & 15  \\
+ \hline
+ `Si`  & 879  & 4  \\
+\hline
+\end{tabularx}
+
+
+### Calcule la Precisión Global, el Error Global, la Precisión Positiva (PP), la Precisión Negativa (PN), los Falsos Positivos (FP), los Falsos Negativos (FN), la Asertividad Positiva (AP) y la Asertividad Negativa (NP).
+
+```{r}
+MC <- matrix(c(83254,15,879,4), nrow = 2, byrow = TRUE)
+MC
+
+Confusion(MC)
+```
+
+### ¿Es bueno o malo el modelo predictivo? Justifique su respuesta.
+
+Aunque la precisión global es bastante alta (98.93%), precisión positiva que es la que realmente nos interesa, es decir si es un fraude, es demasiado baja (0.045%), por lo tanto yo concluiría que el modelo es malo.
+
+
+# Pregunta 3: __[25 puntos]__ En este ejercicio vamos a usar la tabla de `datos wine.csv`, que contiene variantes del vino “Vinho Verde”. Los datos incluyen variables de pruebas fisicoquímicas y sensoriales realizadas a dicho vino.
+
+Para esto realice lo siguiente:
+
+## 1. Cargue la tabla de datos `wine.csv` en R.
+
+```{r}
+datos <- read.table("datos/wine.csv", dec = ".", sep = ",", header = T,stringsAsFactors = T)
+
+datos$calidad <- as.factor(datos$calidad)
+
+str(datos)
+```
+## 2. ¿Es este problema equilibrado o desequilibrado? Justifique su respuesta.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+datos%>%
+  select(tipo)%>%
+  ggplot(aes(x=tipo, fill = tipo))+
+  geom_bar()+
+  theme_minimal()+
+  labs(y= "Numero de individuos", x = " ")
+
+
+```
+
+Es un problema desequilibrado el número de observaciónes de tipo blanco son más que el doble de observaciones de tinto.
+
+## 3. Use el método de K vecinos más cercanos en `traineR` (con los parámetros por defecto) para generar un modelo predictivo para la tabla `wine.csv` usando el 80 % de los datos para la tabla aprendizaje y un 20 % para la tabla testing, luego calcule para los datos de testing la matriz de confusión, la precisión global y la precisión para cada una de las categorías. ¿Son buenos los resultados? Explique.
+
+```{r}
+library(traineR)
+tamaño <- dim(datos)
+n <- tamaño[1]
+
+muestra <- sample(1:n, floor(n*0.80))
+testing <- datos[-muestra,]
+aprendizaje <- datos[muestra,]
+
+modelo.knn <- train.knn(tipo~., data = aprendizaje, kmax = floor(sqrt(n)) )
+
+modelo.knn 
+
+
+prediccion <- predict(modelo.knn, testing, type = "class")
+
+
+MC.knn <- confusion.matrix(testing ,prediccion)
+
+indices <- general.indexes(mc = MC.knn)
+
+indices
+```
+Son muy bueno resultados, tanto para la precisión global, como la precisión por categoría.
+
+## 4. Repita el item 3, pero esta vez, usando el menú de Poder Predictivo seleccione las 6 variables que, según su criterio, tienen mejor poder predictivo. ¿Mejoran los resultados?
+
+```{r}
+
+numerical.predictive.power(datos, "tipo", "fija.acidez")
+
+numerical.predictive.power(datos, "tipo", "volatil.acidez")
+
+numerical.predictive.power(datos, "tipo", "citrica.acidez")
+
+numerical.predictive.power(datos, "tipo", "residual.azucar")
+
+numerical.predictive.power(datos, "tipo", "cloruros")
+
+numerical.predictive.power(datos, "tipo", "densidad")
+
+numerical.predictive.power(datos, "tipo", "pH")
+
+numerical.predictive.power(datos, "tipo", "sulfitos")
+
+numerical.predictive.power(datos, "tipo", "alcohol")
+
+numerical.predictive.power(datos, "tipo", "total.sulfuro.dioxido")
+
+numerical.predictive.power(datos, "tipo", "libre.sulfuro.dioxido")
+
+categorical.predictive.power(datos,"tipo","calidad")
+
+```
+
+```{r}
+modelo.knn <- train.knn(tipo~cloruros + pH + sulfitos + total.sulfuro.dioxido + volatil.acidez + densidad, data = aprendizaje, kmax = floor(sqrt(n)) )
+
+modelo.knn
+
+prediccion <- predict(modelo.knn, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+
+indices1 <- general.indexes(mc = MC)
+
+indices1
+```
+
+Eligiendo las variables `cloruros`,`pH`,`sulfitos`, `total.sulfuro.dioxido`, `volatil.acidez,densidad` mejoraron en un punto la precisión de `tinto`.
+
+5. Genere un Modelo Predictivo usando K vecinos más cercanos para cada uno de los siguientes núcleos: `rectangular`, `triangular`, `epanechnikov`, `biweight`, `triweight`, `cos`, `inv`, `gaussian` y `optimal` ¿Cuál produce los mejores resultados?
+
+### Rectangular 
+
+```{r}
+modelo.rectangular <- train.knn(tipo~., data = aprendizaje, kernel = "rectangular")
+
+prediccion <- predict(modelo.rectangular, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+
+rectangular <- general.indexes(mc = MC)
+rectangular
+```
+
+### Triangular
+
+```{r}
+modelo.triangular <- train.knn(tipo~., data = aprendizaje, kernel = "triangular")
+
+prediccion <- predict(modelo.triangular, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+triangular <- general.indexes(mc = MC)
+triangular
+```
+
+### Epanechnikov
+
+```{r}
+modelo.epanechnikov <- train.knn(tipo~., data = aprendizaje, kernel = "epanechnikov")
+
+prediccion <- predict(modelo.epanechnikov, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+epanechnikov <- general.indexes(mc = MC)
+
+epanechnikov
+```
+
+### Biweight
+
+```{r}
+modelo.biweight <- train.knn(tipo~., data = aprendizaje, kernel = "biweight")
+
+prediccion <- predict(modelo.biweight, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+biweight <- general.indexes(mc = MC)
+
+biweight
+```
+
+### Triweight
+
+```{r}
+modelo.triweight <- train.knn(tipo~., data = aprendizaje, kernel = "triweight")
+
+prediccion <- predict(modelo.triweight, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+triweight <- general.indexes(mc = MC)
+
+triweight
+```
+
+### Cos
+
+```{r}
+modelo.cos <- train.knn(tipo~., data = aprendizaje, kernel = "cos")
+
+prediccion <- predict(modelo.cos, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+cos <- general.indexes(mc = MC)
+cos
+```
+
+### inv
+
+```{r}
+modelo.inv <- train.knn(tipo~., data = aprendizaje, kernel = "inv")
+
+prediccion <- predict(modelo.inv, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+inv <- general.indexes(mc = MC)
+
+inv
+```
+
+### Gaussian 
+
+```{r}
+modelo.gaussian <- train.knn(tipo~., data = aprendizaje, kernel = "gaussian")
+
+prediccion <- predict(modelo.gaussian, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+gaussian <- general.indexes(mc = MC)
+
+gaussian
+```
+
+### Optimal 
+
+```{r}
+modelo.optimal <- train.knn(tipo~., data = aprendizaje, kernel = "optimal")
+
+prediccion <- predict(modelo.optimal, testing, type = "class")
+
+MC<- confusion.matrix(testing ,prediccion)
+optimal <- general.indexes(mc = MC)
+
+optimal
+```
+
+```{r}
+
+precisiones.knn <- rbind(as.data.frame(rectangular[2]),as.data.frame(triangular[2]),as.data.frame(epanechnikov[2]),as.data.frame(biweight[2]),as.data.frame(triweight[2]),as.data.frame(cos[2]),as.data.frame(inv[2]),as.data.frame(gaussian[2]), as.data.frame(optimal[2]))
+
+colnames(precisiones.knn) <- c("PrecisionGlobal")
+
+rownames(precisiones.knn) <- c("rectangular", "triangular", "epanechnikov", "biweight", "triweight", "cos",
+"inv", "gaussian","optimal")
+
+precisiones.knn
+
+
+
+precisiones.knn %>%
+  arrange(desc(PrecisionGlobal))
+```
+
+Los mejores resultados los produce Epanechnikov.
+
+
+# Pregunta 4: __[25 puntos]__ Un cliente nos contrata esta vez para aplicar un modelo no paramétrico con el fin de estudiar una posible oportunidad de negocio, y para ver si le es rentable quiere una predicción de las ventas potenciales de asientos de niños para autos en su tienda. Para ello nos proporciona la tabla de datos `AsientosNinno.csv` que contiene detalles de ventas de asientos de niños para auto en una serie de tiendas similares a las del cliente, y además los datos incluyen variables que definen características de la tienda y su localidad. La tabla de datos está formada por 400 filas y 13 columnas. 
+
+Cargue la tabla de datos en `R` y no elimine los NA. En caso de ser necesario, recodificar las variables de forma adecuada. Para medir el error tome un 20 % de la tabla de datos. Realice lo siguiente:
+
+```{r}
+datos <- read.table("datos/AsientosNinno.csv", sep = ";", dec = ".", header = T)[,-1]
+
+datos <- na.omit(datos)
+
+datos$CalidadEstant <- factor(datos$CalidadEstant,levels = c("Malo","Medio","Bueno"), ordered=TRUE)
+
+numero.predictoras <- dim(datos)[2] - 1
+numero.filas <- dim(datos)[1]
+muestra <- sample(1:numero.filas,numero.filas*0.20)
+aprendizaje <- datos[-muestra, ]
+testing <- datos[muestra, ]
+
+
+```
+
+```{r}
+# Gráfico de dispersión entre el valor real de la variable a predecir y la predicción del modelo.
+plot.real.prediccion <- function(real, prediccion, modelo = "") {
+  g <- ggplot(data = data.frame(Real = real, Prediccion = as.numeric(prediccion)), mapping = aes(x = Real, y = Prediccion)) +
+    geom_point(size = 1, col = "dodgerblue3") +
+    labs(title = paste0("Real vs Predicción", ifelse(modelo == "", "", paste(", con", modelo))),
+         x = "Real",
+         y = "Predicción")
+  return(g)
+}
+```
+
+
+# 1. Genere un modelo de regresión con KNN usando cada unos de los kernels disponibles. Identifique el kernel que da un mejor resultado en la tabla de testing e interprete las medidas de error.
+
+
+### Rectangular 
+
+```{r}
+
+library(traineR)
+library(caret)
+
+modelo.rectangular <- train.knn(Ventas~., data = aprendizaje, kernel = "rectangular")
+
+prediccion <- predict(modelo.rectangular, testing)
+
+pre.rectangular <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.rectangular
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Rectangular")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Triangular
+
+```{r}
+modelo.triangular <- train.knn(Ventas~., data = aprendizaje, kernel = "triangular")
+
+prediccion <- predict(modelo.triangular, testing)
+
+pre.triangular <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.triangular
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Triangular")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+
+```
+
+### Epanechnikov
+
+```{r}
+modelo.epanechnikov <- train.knn(Ventas~., data = aprendizaje, kernel = "epanechnikov")
+
+prediccion <- predict(modelo.epanechnikov, testing)
+
+pre.epanechnikov <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.epanechnikov
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Epanechnikov")
+
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Biweight
+
+```{r}
+modelo.biweight <- train.knn(Ventas~., data = aprendizaje, kernel = "biweight")
+
+prediccion <- predict(modelo.biweight, testing)
+
+pre.biweight <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.biweight
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Biweight")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Triweight
+
+```{r}
+modelo.triweight <- train.knn(Ventas~., data = aprendizaje, kernel = "triweight")
+
+prediccion <- predict(modelo.triweight, testing)
+
+pre.triweight <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.triweight
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Triweight")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Cos
+
+```{r}
+modelo.cos <- train.knn(Ventas~., data = aprendizaje, kernel = "cos")
+
+prediccion <- predict(modelo.cos, testing)
+
+pre.cos <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.cos
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Cos")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### inv
+
+```{r}
+modelo.inv <- train.knn(Ventas~., data = aprendizaje, kernel = "inv")
+
+prediccion <- predict(modelo.inv, testing)
+
+pre.inv <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.inv
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Inv")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Gaussian 
+
+```{r}
+modelo.gaussian <- train.knn(Ventas~., data = aprendizaje, kernel = "gaussian")
+
+prediccion <- predict(modelo.gaussian, testing)
+
+pre.gaussian <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.gaussian
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Gaussian")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Optimal 
+
+```{r}
+modelo.optimal <- train.knn(Ventas~., data = aprendizaje, kernel = "optimal")
+
+prediccion <- predict(modelo.optimal, testing)
+
+pre.optimal <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.optimal
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Optimal")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+El modelo que da mejores resultados es el `epanechnikov`, tiene menor error y mejor correlación.
+
+## 2. Esta tabla contiene algunas variables muy correlacionadas, descarte al menos 2 variables predictoras e indique la razón. Corra nuevamente una regresión con KNN e identifique el kernel que da mejores resultados. ¿Mejora el resultado respecto al modelo seleccionado en el inciso anterior?
+
+```{r}
+library(corrplot)
+
+matriz.correlacion<-cor(datos[,-8])
+
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(matriz.correlacion, method="shade", shade.col=NA, tl.col="black", tl.srt=45,
+col=col(200), addCoef.col="black", order="AOE")
+library("ggplot2")
+
+#elimino las variables
+aprendizaje <- aprendizaje[,-c(4,13)]
+testing <- testing[,-c(4,13)]
+```
+
+### Rectangular
+
+```{r}
+modelo.rectangular <- train.knn(Ventas~., data = aprendizaje, kernel = "rectangular")
+
+prediccion <- predict(modelo.rectangular, testing)
+
+pre.rectangular <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.rectangular
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Rectangular")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Triangular
+
+```{r}
+modelo.triangular <- train.knn(Ventas~., data = aprendizaje, kernel = "triangular")
+
+prediccion <- predict(modelo.triangular, testing)
+
+pre.triangular <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.triangular
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Triangular")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+
+```
+
+### Epanechnikov
+
+```{r}
+modelo.epanechnikov <- train.knn(Ventas~., data = aprendizaje, kernel = "epanechnikov")
+
+prediccion <- predict(modelo.epanechnikov, testing)
+
+pre.epanechnikov <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.epanechnikov
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Epanechnikov")
+
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Biweight
+
+```{r}
+modelo.biweight <- train.knn(Ventas~., data = aprendizaje, kernel = "biweight")
+
+prediccion <- predict(modelo.biweight, testing)
+
+pre.biweight <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.biweight
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Biweight")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Triweight
+
+```{r}
+modelo.triweight <- train.knn(Ventas~., data = aprendizaje, kernel = "triweight")
+
+prediccion <- predict(modelo.triweight, testing)
+
+pre.triweight <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.triweight
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Triweight")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Cos
+
+```{r}
+modelo.cos <- train.knn(Ventas~., data = aprendizaje, kernel = "cos")
+
+prediccion <- predict(modelo.cos, testing)
+
+pre.cos <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.cos
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Cos")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### inv
+
+```{r}
+modelo.inv <- train.knn(Ventas~., data = aprendizaje, kernel = "inv")
+
+prediccion <- predict(modelo.inv, testing)
+
+pre.inv <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.inv
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Inv")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Gaussian 
+
+```{r}
+modelo.gaussian <- train.knn(Ventas~., data = aprendizaje, kernel = "gaussian")
+
+prediccion <- predict(modelo.gaussian, testing)
+
+pre.gaussian <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.gaussian
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Gaussian")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Optimal 
+
+```{r}
+modelo.optimal <- train.knn(Ventas~., data = aprendizaje, kernel = "optimal")
+
+prediccion <- predict(modelo.optimal, testing)
+
+pre.optimal <- indices.precision(testing$Ventas ,prediccion$prediction,numero.predictoras)
+
+pre.optimal
+
+g <- plot.real.prediccion(testing$Ventas, prediccion$prediction, modelo = "KNN-Regresión Optimal")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+No hubo mucha diferencia en los resultados, el modelo no mejoró o empeoró significativamente.Sin embargo, el mejor núcleo esta vez fue `triangular`.
+
+## 3. Para los modelos de KNN, Regresión Lineal Múltiple, Lasso y Ridge póngalos a competir y obtenga un modelo ganador ¿Cuál de estos modelos prefiere usar para interpretar los resultados obtenidos?
+
+### LASSO
+
+```{r}
+library(glmnet)
+
+aprendizaje <- datos[-muestra, ]
+testing <- datos[muestra, ]
+
+x<- model.matrix(Ventas~.,datos)[,-1]
+y<-datos$Ventas
+
+options(max.print = 2000,width=2000)
+
+
+# Usando validación cruzada para determinar el mejor Lambda
+sal.cv<-cv.glmnet(x,y,alpha=0)
+
+# Construye el Modelo LASSO
+lasso.mod<-glmnet(x,y,alpha=1)
+
+
+x.datos.prueba<-model.matrix(Ventas~.,testing)[,-1]
+
+mejor.lambda<-sal.cv$lambda.min
+mejor.lambda
+coef(lasso.mod)[,which(lasso.mod$lambda==mejor.lambda)]
+
+pred1<-predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba,type = "coefficients")
+
+pred<-predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba)
+
+numero.predictoras <- dim(datos)[2] - 1
+
+numero.filas <- dim(datos)[1]
+
+
+indices.calidad <- indices.precision(testing$Ventas,pred,numero.predictoras)
+indices.calidad
+
+```
+### RIDGE
+
+
+```{r}
+
+ridge.mod<-glmnet(x,y,alpha=0)
+
+
+sal.cv<-cv.glmnet(x,y,alpha=0)
+
+mejor.lambda<-sal.cv$lambda.min
+
+coef(ridge.mod)[,which(ridge.mod$lambda==mejor.lambda)]
+
+pred1 <- predict(ridge.mod,s=mejor.lambda,newx=x.datos.prueba,type = "coefficients")
+pred<-predict(ridge.mod,s=mejor.lambda,newx=x.datos.prueba)
+# Factor de Multiplicación en la raíz del error cuadrático medio
+numero.predictoras <- dim(testing)[2]-1
+
+indices.calidad <- indices.precision(testing$Ventas,pred,numero.predictoras)
+indices.calidad
+
+pred1
+```
+
+Debido a que utiliza menos variables que los demás modelos y el error entre `Lasso` y `Ridge` varía por poco decimales, utilizaría `Lasso`. Además en compración con todos los nucleos de KNN es por mucho mejor `Lasso`.
+
+
+# Pregunta 5: __[25 puntos]__ En este ejercicio usaremos la tabla de datos que viene en el archivo `Uso_Bicicletas.csv`. Este es un conjunto de datos de usuarios de la empresa de alquiler de bicicletas por horas *Capital Bike* en Washington D.C. Las columnas de la tabla de datos son:
+
+La variable a predecir es `TotalUsuarios`.
+
+## 1. Cargue la tabla de datos en `R.` Asegúrese de codificar adecuadamente las variables y de ignorar las columnas `Fecha`, `UsuariosCasuales` y `UsuariosRegistrados`. Además asegúrese de seleccionar la variable `TotalUsuarios` como la variable a predecir. Use para entrenar el modelo el 80 % de los datos.
+
+```{r}
+datos <- read.table("datos/Uso_Bicicletas.csv",sep = ",", dec = ".", header = T)[,-c(1,12,13)]
+
+tamaño <- dim(datos)
+n <- tamaño[1]
+
+muestra <- sample(1:n, floor(n*0.80))
+testing <- datos[-muestra,]
+aprendizaje <- datos[muestra,]
+
+x<-model.matrix(TotalUsuarios~.,datos)[,-1]
+tamaño <- dim(datos)
+
+
+
+
+```
+
+## 2. Corra un modelo de KNN en `traineR` con los parámetros por defecto e incluyendo todas las variables predictoras. Interprete las medidas de error.
+
+```{r}
+
+
+
+modelo.knn <- train.knn(TotalUsuarios~., data = aprendizaje, kmax = floor(sqrt(n)) )
+
+modelo.knn 
+
+
+prediccion <- predict(modelo.knn, testing)
+
+numero.predictoras <- dim(datos)[2]-1
+
+pre.knn <- indices.precision(testing$TotalUsuarios,prediccion$prediction,numero.predictoras)
+
+pre.knn
+```
+
+El promedio de los errores es de 103.66 para todas las varibles.
+
+Además en promedio el modelo se equivocó un 36% del valor real.
+
+La correlación es alta, es un modelo bueno.
+
+## 4. Repita el item 2, pero esta vez seleccione las 4 variables que, según su criterio, tienen mejor poder predictivo. ¿Mejoran los resultados?
+
+```{r}
+library(corrplot)
+matriz.correlacion<-cor(datos)
+
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(matriz.correlacion, method="shade", shade.col=NA, tl.col="black", tl.srt=45,
+col=col(200), addCoef.col="black", order="AOE")
+library("ggplot2")  
+```
+
+```{r}
+#Selecciones Hora, Humedad, SensacionTermica, TemperaturaReal
+modelo.knn <- train.knn(TotalUsuarios~., data = aprendizaje[,c(2,9,7,8,11)], kmax = floor(sqrt(n)) )
+
+modelo.knn 
+
+
+prediccion <- predict(modelo.knn, testing)
+
+numero.predictoras <- 4
+
+pre.knn <- indices.precision(testing$TotalUsuarios,prediccion$prediction,numero.predictoras)
+
+pre.knn
+```
+No mejoran los resultados, en su lugar empeoran pero no por mucho, lo cual es positivo ya que es un modelo con menos variables y más simple de interpretar.
+
+## 4. Genere un Modelo de Regresión usando K vecinos más cercanos para cada uno de los siguientes núcleos: `rectangular`, `triangular`, `epanechnikov`, `biweight`, `triweight`, `cos`, `inv`, `gaussian` y `optimal` ¿Cuál produce los mejores resultados?
+
+### Rectangular
+
+```{r}
+modelo.rectangular <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "rectangular")
+
+prediccion <- predict(modelo.rectangular, testing)
+
+pre.rectangular <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.rectangular
+
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Rectangular")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Triangular
+
+```{r}
+modelo.triangular <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "triangular")
+
+prediccion <- predict(modelo.triangular, testing)
+
+pre.triangular <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.triangular
+
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Triangular")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+
+```
+
+### Epanechnikov
+
+```{r}
+modelo.epanechnikov <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "epanechnikov")
+
+prediccion <- predict(modelo.epanechnikov, testing)
+
+pre.epanechnikov <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.epanechnikov
+
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Epanechnikov")
+
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Biweight
+
+```{r}
+modelo.biweight <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "biweight")
+
+prediccion <- predict(modelo.biweight, testing)
+
+pre.biweight <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.biweight
+
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Biweight")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Triweight
+
+```{r}
+modelo.triweight <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "triweight")
+
+prediccion <- predict(modelo.triweight, testing)
+
+pre.triweight <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.triweight
+
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Triweight")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Cos
+
+```{r}
+modelo.cos <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "cos")
+
+prediccion <- predict(modelo.cos, testing)
+
+pre.cos <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.cos
+
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Cos")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### inv
+
+```{r}
+modelo.inv <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "inv")
+
+prediccion <- predict(modelo.inv, testing)
+
+pre.inv <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.inv
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Inv")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Gaussian 
+
+```{r}
+modelo.gaussian <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "gaussian")
+
+prediccion <- predict(modelo.gaussian, testing)
+
+pre.gaussian <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.gaussian
+
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Gaussian")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Optimal 
+
+```{r}
+modelo.optimal <- train.knn(TotalUsuarios~., data = aprendizaje, kernel = "optimal")
+
+prediccion <- predict(modelo.optimal, testing)
+
+pre.optimal <- indices.precision(testing$TotalUsuarios ,prediccion$prediction,numero.predictoras)
+
+pre.optimal
+
+g <- plot.real.prediccion(testing$TotalUsuarios, prediccion$prediction, modelo = "KNN-Regresión Optimal")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+El mejor modelo es Triangular pues posee el menor error de todos los núcleos y la correlación más alta.
