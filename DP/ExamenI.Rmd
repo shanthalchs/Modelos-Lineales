@@ -1,0 +1,156 @@
+---
+title: "Examen 1 - Distribuciones de Pérdidas"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    df_print: paged 
+    highlight: kate
+    toc: TRUE
+    toc_float: TRUE
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+Parte II: 50 puntos. Entrega 22 de septiembre a las 18:00. Utilice `R` para realizar todos los cálculos necesarios.
+
+Suponga que un portafolio de pólizas tienen una frecuencia de reclamación que sigue una distribución $BN(2, 0.1)$. Cuando sucede un reclamo, el monto de la reclamación sigue una distribución logarítmica de parámetro $\theta = 0.46$.
+
++ (15 puntos) Calcule la distribución exacta de $S$.
+
+```{r}
+library(actuar)
+
+
+fx <- discretize(plogarithmic(x,0.46), from = 0, to = 100)
+
+Fs <- aggregateDist(method = "recursive", model.sev = fx, model.freq = "negative binomial", size =  2, prob = 0.1)
+
+
+
+
+plot(Fs)
+
+v <- vector()
+for (i in 1:100 ){
+  
+  v[i] <- Fs(i)
+}
+
+v
+```
+
++ __(15 puntos)__ Obtenga esta misma distribución a través de las aproximaciones vistas en clase.
+
+```{r}
+library(Deriv)
+
+M=function(t){((0.1)/(1-(1-(0.1))*((log(1-0.46*exp(t)))/(log(1-0.46)))))^2}
+
+M1<-Deriv(M,"t")
+ES=M1(0)
+
+M2=Deriv(M1,"t")
+ES_2=M2(0)
+
+M3=Deriv(M2,"t")
+ES_3=M3(0)
+
+M4=Deriv(M3,"t")
+ES_4=M4(0)
+
+sigma=sqrt(ES_2-ES^2)
+
+a3=1/sigma^3*(ES_3-3*ES_2*ES+3*ES*ES^2-ES^3)
+
+a4=1/sigma^4*(ES_4-4*ES_3*ES+6*ES_2*ES^2-4*ES*ES^3+ES^4)-3
+
+Edgeworth=function(x,m,sigma, a3, a4){
+  
+  theta=dnorm((x-m)/sigma)
+ z=(x-m)/sigma
+  f=theta/sigma*(1-a3/6*(3*z-z^3)+a4/24*(3-6*z^2+z^4)+a3^2/72*(-15+45*z^2-15*z^4+z^6))
+
+  Theta_=pnorm((x-m)/sigma)
+ 
+  F_=Theta_+theta*(-a3/6*(z^2-1)+a4/24*(-z^3+3*z)+a3^2/72*(-15*z+10*z^3-z^5))
+  
+  acum=F_
+  
+  resul=list(f,acum)
+  return(resul)
+}
+
+x=10
+E <- vector()
+for(i in 1:100){
+  E[i] <- Edgeworth(i,ES,sigma, a3, a4)[[2]]
+}
+
+E
+```
+
+```{r}
+
+#Esperanza
+mean.Logaritmica <- (-1/log(1-0.46))*(0.46/(1-0.46))
+mean.BNegativa <- (2*0.9)/0.1
+#Varianza
+var.Logaritmica <- (0.46^2 + 0.46*log(1-0.46))/(((1-0.46)^2)*(log(1-0.46)^2))
+varBNegativa <- (2*0.9)/(0.1^2)
+
+expS <- meanL*meanBN
+VaRS <- varBN*meanL^2 + varL*meanBN
+
+vv <- c()
+
+for (i in 1:100){
+  
+  Phi <- (i-expS)/(sqrt(VaRS))
+  vv[i]<- pnorm(Phi)
+}
+
+vv
+```
+
+```{r}
+library(ggplot2)
+
+plot(v, col = "blue", type = "line")
+lines(E,col = "red")
+lines(vv, col = "green")
+legend("topleft", legend = c("Exacta", "Edgeworth", "Normal"), col=c("blue","red","green"), pch=1)
+
+
+Aproximaciones <-  data.frame(Exacta = v, Edgeworth = E, Normal = vv)
+
+
+Aproximaciones
+
+```
+
++ (10 puntos) Determine cuál es la mejor.
+
+La mejor sería la aproximación de Edgeworth y la aproximación Normal es la peor
+
++ (10 puntos) Comente el porqué del resultado anterior.
+
+Para mí sería la Edgeworth debido a que se aproxima más a la exacta y a que utilizamos cuatro momentos de S, creo que conserva mejor la información que las demás.
+
+
+
