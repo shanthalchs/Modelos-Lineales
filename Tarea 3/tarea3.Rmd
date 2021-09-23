@@ -365,10 +365,9 @@ optimal
 ```
 
 ```{r}
+library(dplyr)
 
-precisiones.knn <- rbind(as.data.frame(rectangular[2]),as.data.frame(triangular[2]),as.data.frame(epanechnikov[2]),as.data.frame(biweight[2]),as.data.frame(triweight[2]),as.data.frame(cos[2]),as.data.frame(inv[2]),as.data.frame(gaussian[2]), as.data.frame(optimal[2]))
-
-colnames(precisiones.knn) <- c("PrecisionGlobal")
+precisiones.knn <- rbind(as.data.frame(Confusion(rectangular$confusion.matrix)),as.data.frame(Confusion(triangular$confusion.matrix)),as.data.frame(Confusion(epanechnikov$confusion.matrix)),as.data.frame(Confusion(biweight$confusion.matrix)),as.data.frame(Confusion(triweight$confusion.matrix)),as.data.frame(Confusion(cos$confusion.matrix)),as.data.frame(Confusion(inv$confusion.matrix)),as.data.frame(Confusion(gaussian$confusion.matrix)), as.data.frame(Confusion(optimal$confusion.matrix)))
 
 rownames(precisiones.knn) <- c("rectangular", "triangular", "epanechnikov", "biweight", "triweight", "cos",
 "inv", "gaussian","optimal")
@@ -378,7 +377,16 @@ precisiones.knn
 
 
 precisiones.knn %>%
-  arrange(desc(PrecisionGlobal))
+  arrange(desc(Precision.Global))
+
+
+
+
+write.csv(precisiones.knn,"Tabla Comparativa wine.csv", row.names = FALSE)
+
+precisiones.knn
+
+
 ```
 
 Los mejores resultados los produce Epanechnikov.

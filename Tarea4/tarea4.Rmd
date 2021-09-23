@@ -1,0 +1,170 @@
+---
+title: "Tarea 4 - Modelos Lineales"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    df_print: paged 
+    highlight: kate
+    toc: TRUE
+    toc_float: TRUE
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+
+# Pregunta 1: __[10 puntos]__ En este ejercicio vamos a usar la tabla de datos `wine.csv`, que contiene variantes del vino “Vinho Verde”. Los datos incluyen variables de pruebas fisicoquímicas y sensoriales realizadas a dicho vino.
+
+La tabla contiene 1599 filas y 12 columnas.
+
+Para esto realice lo siguiente:
+
+## 1. Cargue la tabla de datos `wine.csv` en `R`.
+
+```{r}
+datos <- read.table("datos/wine.csv", dec = ".", sep = ",",header = T, stringsAsFactors = T)
+```
+
+## 2. Usando el comando sample de `R` genere al azar una tabla de testing con una 20 % de los datos y con el resto de los datos genere una tabla de aprendizaje.
+
+```{r}
+filas <- dim(datos)[1] 
+muestra <- sample(1:filas, floor(filas*0.20))
+ttesting <- datos[muestra,]
+taprendizaje <- datos[-muestra,]
+```
+
+## 3. Usando árboles de Decisión (con `rpart`) genere un modelo predictivo para la tabla de aprendizaje, grafique el árbol obtenido. Pruebe modificar los parámetros del método hasta encontrar el que minimiza el error global.
+
+```{r}
+library(rpart)
+library(traineR)
+library(rpart.plot)
+
+modelo <- train.rpart(tipo~.,data = taprendizaje, minsplit = 2)
+prediccion <- predict(modelo, ttesting, type = 'class')
+mc         <- confusion.matrix(newdata = ttesting, prediccion)
+
+
+Arboles <- general.indexes(mc = mc)
+Arboles
+```
+
+```{r}
+prp(modelo,extra=104,
+    branch.type=2, 
+    box.col=c("pink",
+              "palegreen3",
+              "cyan")[modelo$frame$yval])
+```
+
+## 4. Genere un modelos predictivos para la tabla de aprendizaje usando Bosques Aleatorios, ADABoosting y XGBoosting. Pruebe modificar los parámetros del método hasta encontrar el que minimiza el error global.
+
+### Bosques Aleatorios
+
+```{r}
+modelo.Bosques  <- train.randomForest(formula = tipo~., data = taprendizaje, importance = T)
+
+prediccion.Bosques   <- predict(modelo.Bosques, ttesting, type = "class")
+mc           <- confusion.matrix(ttesting, prediccion.Bosques)
+BosquesAleatorios <- general.indexes(mc = mc)
+BosquesAleatorios
+```
+
+### ADABoosting
+
+```{r}
+modelo.ADA  <- train.ada(formula = tipo~.,data = taprendizaje)
+prediccion.ADA   <- predict(modelo.ADA, ttesting, type = "class")
+
+mc           <- confusion.matrix(ttesting, prediccion.ADA)
+ADABoosting <- general.indexes(mc = mc)
+ADABoosting
+```
+
+### XGBoosting
+
+```{r}
+modelo.XG <- train.xgboost(formula = tipo~.,
+                              data    = taprendizaje,
+                              nrounds = 79,
+                              verbose = F)
+
+prediccion.XG <- predict(modelo.XG, ttesting , type = "class")
+mc         <- confusion.matrix(ttesting,prediccion.XG)
+XGBoosting <- general.indexes(mc = mc)
+XGBoosting
+```
+
+## 5. Construya un `DataFrame` de manera que en cada una de las filas aparezca un modelo predictivo y en las columnas aparezcan los índices Precisión Global, Error Global Precisión Positiva (PP), Precisión Negativa (PN), Falsos Positivos (FP), los Falsos Negativos (FN), la Asertividad Positiva (AP) y la Asertividad Negativa (AN). ¿Cuál de los modelos es mejor para estos datos? (incluya todos los métodos que hemos estudiando en el curso).
+
+Mi función 
+
+```{r}
+Confusion <- function(MC){
+  VN <- MC[1,1]
+  FN <- MC[2,1]
+  VP <- MC[2,2]
+  FP <- MC[1,2]
+  
+  PG <- (VN + VP)/(VN + FP + FN + VP)
+  EG <- 1 - PG
+  PP <- VP/(FN + VP)
+  PN <- VN/(FP + VN)
+  FP <- FP/(VN + FP)
+  FN <- FN/(VP + FN)
+  AP <- VP/(FP + VP)
+  AN <- VN/(VN + FN)
+  
+  Respuesta <- list(PG = PG,EG = EG, PP = PP,PN = PN,FP = FP,FN=FN,AP=AP,AN=AN)
+  
+  names(Respuesta) <- c("Precision Global", "Error Global","Precision Positiva", "Precision Negativa", "Falsos Positivos", "Falsos Negativos", "Asertividad Positiva" , "Asertividad Negativa")
+  
+  return(Respuesta)
+}
+```
+
+
+```{r}
+
+precisiones <- rbind(as.data.frame(Confusion(Arboles$confusion.matrix)),as.data.frame(Confusion(BosquesAleatorios$confusion.matrix)),as.data.frame(Confusion(ADABoosting$confusion.matrix)),as.data.frame(Confusion(XGBoosting$confusion.matrix)))
+
+
+tablaC <- read.table("Tabla Comparativa wine.csv",dec = ".",sep = "," , header = T)
+
+tablaC <- rbind(precisiones,tablaC)
+
+rownames(tablaC) <- c("Árboles de Decisión", "Bosques Aleatorios", "ADA Boosting", "XG Boosting","rectangular", "triangular", "epanechnikov", "biweight", "triweight", "cos",
+"inv", "gaussian","optimal")
+
+tablaC
+
+
+
+tablaC %>%
+  arrange(desc(Precision.Global))
+
+
+
+
+write.csv(tablaC,"Tabla Comparativa wine.csv", row.names = FALSE)
+
+```
+
+El mejor modelo debido a que su precisión global es mayor y sus demás índices son muy buenos sería `ADABoosting`.
+
