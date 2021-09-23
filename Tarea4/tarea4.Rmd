@@ -152,8 +152,6 @@ tablaC <- rbind(precisiones,tablaC)
 rownames(tablaC) <- c("Árboles de Decisión", "Bosques Aleatorios", "ADA Boosting", "XG Boosting","rectangular", "triangular", "epanechnikov", "biweight", "triweight", "cos",
 "inv", "gaussian","optimal")
 
-tablaC
-
 
 
 tablaC %>%
