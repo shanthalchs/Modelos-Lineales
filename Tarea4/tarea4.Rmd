@@ -27,6 +27,47 @@ opts_chunk$set(echo=TRUE,
 opts_knit$set(width=75)
 ```
 
+```{r,echo=FALSE}
+# Residual Sum of Square (RSS)
+RSS <- function(Pred,Real) {
+  ss <- sum((Real-Pred)^2)
+  return(ss)
+}
+RSE<-function(Pred,Real,NumPred) {
+  N<-length(Real)-NumPred-1  # <- length(Real)-(NumPred+1)
+  ss<-sqrt((1/N)*RSS(Pred,Real))
+  return(ss)
+}
+MSE <- function(Pred,Real) {
+  N<-length(Real)
+  ss<-(1/N)*RSS(Pred,Real)
+  return(ss)
+}
+error.relativo <- function(Pred,Real) {
+  ss<-sum(abs(Real-Pred))/sum(abs(Real))
+  return(ss)
+}
+
+# Funciones para desplegar precisión
+indices.precision <- function(real, prediccion,cantidad.variables.predictoras) {
+  return(list(error.cuadratico = MSE(prediccion,real),
+              raiz.error.cuadratico = RSE(prediccion,real,cantidad.variables.predictoras),
+              error.relativo = error.relativo(prediccion,real),
+              correlacion = as.numeric(cor(prediccion,real))))
+}
+
+
+# Gráfico de dispersión entre el valor real de la variable a predecir y la predicción del modelo.
+plot.real.prediccion <- function(real, prediccion, modelo = "") {
+  g <- ggplot(data = data.frame(Real = real, Prediccion = as.numeric(prediccion)), mapping = aes(x = Real, y = Prediccion)) +
+    geom_point(size = 1, col = "dodgerblue3") +
+    labs(title = paste0("Real vs Predicción", ifelse(modelo == "", "", paste(", con", modelo))),
+         x = "Real",
+         y = "Predicción")
+  return(g)
+}
+```
+
 
 # Pregunta 1: __[10 puntos]__ En este ejercicio vamos a usar la tabla de datos `wine.csv`, que contiene variantes del vino “Vinho Verde”. Los datos incluyen variables de pruebas fisicoquímicas y sensoriales realizadas a dicho vino.
 
@@ -113,9 +154,9 @@ XGBoosting
 
 ## 5. Construya un `DataFrame` de manera que en cada una de las filas aparezca un modelo predictivo y en las columnas aparezcan los índices Precisión Global, Error Global Precisión Positiva (PP), Precisión Negativa (PN), Falsos Positivos (FP), los Falsos Negativos (FN), la Asertividad Positiva (AP) y la Asertividad Negativa (AN). ¿Cuál de los modelos es mejor para estos datos? (incluya todos los métodos que hemos estudiando en el curso).
 
-Mi función 
 
-```{r}
+
+```{r,echo=FALSE}
 Confusion <- function(MC){
   VN <- MC[1,1]
   FN <- MC[2,1]
@@ -141,7 +182,7 @@ Confusion <- function(MC){
 
 
 ```{r}
-
+library(dplyr)
 precisiones <- rbind(as.data.frame(Confusion(Arboles$confusion.matrix)),as.data.frame(Confusion(BosquesAleatorios$confusion.matrix)),as.data.frame(Confusion(ADABoosting$confusion.matrix)),as.data.frame(Confusion(XGBoosting$confusion.matrix)))
 
 
@@ -160,9 +201,430 @@ tablaC %>%
 
 
 
-write.csv(tablaC,"Tabla Comparativa wine.csv", row.names = FALSE)
-
+write.csv(tablaC,"Tabla Comparativa wine2.csv", row.names = FALSE)
+tablaC
 ```
 
 El mejor modelo debido a que su precisión global es mayor y sus demás índices son muy buenos sería `ADABoosting`.
+
+# Pregunta 2: __[10 puntos]__ Suponga que somos contratados por el banco y se nos pide volver a predecir el monto promedio de deuda en tarjeta de crédito de una cartera de clientes relativamente nuevos, basado en otra cartera de comportamiento y estructura similar de la cual sí se tiene información de deuda en tarjeta de crédito. En este ejercicio hacemos uso de la tabla de datos `DeudaCredito.csv` que contiene información de los clientes en una de las principales carteras de crédito del banco, e incluye variables que describen cada cliente tanto dentro del banco como fuera de este.
+
+Cargue la tabla de datos en `R`, asegúrese que las variables se están leyendo de forma correcta. Recodifique variables en caso de que sea necesario, tome para entrenamiento un 80 % de la tabla de datos. Realice lo siguiente:
+
+```{r}
+datos <- read.table("datos/DeudaCredito.csv", dec = ".", sep = ",", header = T, stringsAsFactors = T )[,-1]
+
+str(datos)
+
+numero.predictoras <- dim(datos)[2] - 1
+filas <- dim(datos)[1] 
+muestra <- sample(1:filas, floor(filas*0.20))
+ttesting <- datos[muestra,]
+taprendizaje <- datos[-muestra,]
+
+```
+
+## 1. Genere Modelos de Regresión usando KNN, Regresión Múltiple, Ridge, Lasso, Arboles, Bosques Aleatorios y Potenciación incluyendo las todas las variables predictoras ¿Qué error se obtiene sobre la tabla de testing para estos modelos? ¿Cuál considera que es un mejor modelo para predecir la deuda en tarjeta de crédito? Justifique. Interprete las medidas de error obtenidas.
+
+### KNN
+
+```{r}
+library(traineR)
+library(caret)
+
+modelo <- train.knn(Balance~., data = taprendizaje, kmax = floor(sqrt(filas)) )
+
+prediccion1 <- predict(modelo, ttesting)
+
+KNN <- indices.precision(ttesting$Balance ,prediccion1$prediction,numero.predictoras)
+
+KNN
+```
+
+### Regresión Múltiple
+
+```{r}
+modelo.lm <- lm(Balance~., taprendizaje)
+
+prediccion2 <- predict(modelo.lm, ttesting)
+# Medición de precisión
+pre.lm <- indices.precision(ttesting$Balance, prediccion2,numero.predictoras)
+pre.lm
+```
+### Ridge
+
+```{r}
+library(glmnet)
+
+
+x<-model.matrix(Balance~.,datos)[,-1]
+y<-datos$Balance
+x.datos.prueba<-model.matrix(Balance~.,ttesting)[,-1]
+
+
+ridge.mod<-glmnet(x,y,alpha=0)
+
+sal.cv<-cv.glmnet(x,y,alpha=0)
+
+mejor.lambda<-sal.cv$lambda.min
+
+# coef(ridge.mod)[,which(ridge.mod$lambda==mejor.lambda)]
+
+prediccion3<-predict(ridge.mod,s=mejor.lambda,newx=x.datos.prueba)
+
+Ridge <- indices.precision(ttesting$Balance,prediccion3,numero.predictoras)
+Ridge
+```
+### LASSO
+
+```{r}
+lasso.mod<-glmnet(x,y,alpha=1)
+
+
+prediccion4<-predict(lasso.mod,s=mejor.lambda,newx=x.datos.prueba)
+
+LASSO <- indices.precision(ttesting$Balance,prediccion4,numero.predictoras)
+LASSO
+```
+
+### Arboles de Decisión
+
+```{r}
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+
+modelo.rpart <- rpart(Balance~., data = taprendizaje, control = rpart.control(minsplit = 5, maxdepth = 25))
+
+prediccion5 <- predict(modelo.rpart, ttesting)
+
+Arboles <- indices.precision(ttesting$Balance,prediccion5,numero.predictoras)
+
+Arboles
+```
+
+### Bosques Aleatorios
+
+```{r}
+library(randomForest)
+modelo <- randomForest(Balance~., data =taprendizaje, importance = TRUE, ntree = 20, mtry = 3) 
+
+prediccion6 <- predict(modelo, ttesting)
+
+Bosques <- indices.precision(ttesting$Balance,prediccion6,numero.predictoras)
+
+Bosques
+```
+### Potenciación
+
+```{r}
+library(gbm)
+
+modelo.b <- gbm(Balance~., data = taprendizaje, distribution = "gaussian", 
+                interaction.depth = 1, n.trees = 300, shrinkage = 0.1)
+
+prediccion7 <- predict(modelo.b, ttesting)
+
+Potenciacion <- indices.precision(ttesting$Balance,prediccion7,numero.predictoras)
+
+Potenciacion
+```
+
+
+```{r}
+library(dplyr)
+
+errores <- rbind(as.data.frame(KNN),as.data.frame(pre.lm),as.data.frame(Ridge),as.data.frame(LASSO),as.data.frame(Arboles), as.data.frame(Bosques), as.data.frame(Potenciacion ))
+
+
+rownames(errores) <- c("KNN","Regresión Múltiple","Lasso","Ridge", "Arboles de Decisión", "Bosques Aleatorios", "Potenciacion")
+
+errores 
+
+errores %>%
+filter(raiz.error.cuadratico == min(errores$raiz.error.cuadratico))
+
+```
+
+Tomando como referencia el error cuadrático medio, el mejor modelo fue Regresión Múltiple.
+
+El promedio de los errores fue 119.824.
+
+La correlación fue de 97.12% la cual es bastante alta.
+
+En promedio el modelo se equivocó un 19% de las veces.
+
+
+## 2. ¿Qué observa en los gráficos de dispersión que muestra los valores reales contra la predicción de cada modelo? ¿Qué desventajas o ventajas puede observar en cada modelo? Explique.
+
+### KNN
+
+```{r}
+g <- plot.real.prediccion(ttesting$Balance, prediccion1$prediction , modelo = "KNN - Regresión")
+
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+
+```
+
+### Regresión Múltiple
+
+```{r}
+g <- plot.real.prediccion(ttesting$Balance, prediccion2 , modelo = "Regresión Múltiple")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### LASSO
+
+```{r}
+g <- plot.real.prediccion(ttesting$Balance, prediccion3 , modelo = "LASSO - Regresión")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Ridge
+
+```{r}
+g <- plot.real.prediccion(ttesting$Balance, prediccion4 , modelo = "Ridge - Regresión")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Arboles
+
+```{r}
+g <- plot.real.prediccion(ttesting$Balance, prediccion5 , modelo = "Arboles de Decisión - Regresión")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+
+### Bosques Aleatorios
+
+```{r}
+g <- plot.real.prediccion(ttesting$Balance, prediccion6 , modelo = "Bosques Aleatorios - Regresión")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+### Potenciación
+
+```{r}
+g <- plot.real.prediccion(ttesting$Balance, prediccion7 , modelo = "Potenciación - Regresión")
+g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
+```
+
+
+## 3. Muestre e interprete la mejor regla que genera el modelo de Arboles de Regresión. Desde su punto de vista ¿Le ve sentido a esta regla? ¿Esto es bueno o malo?
+
+```{r}
+library(rattle)
+
+print(asRules(modelo.rpart))
+```
+# Pregunta 3: [20 puntos] Un cliente nos contrata esta vez para aplicar un modelo no param´etrico con el fin de estudiar una posible oportunidad de negocio, y para ver si le es rentable quiere una predicci´on de las ventas potenciales de asientos de ni˜nos para autos en su tienda. Para ello nos proporciona la tabla de datos AsientosNinno.csv que contiene detalles de ventas de asientos de ni˜nos para auto en una serie de tiendas similares a las del cliente, y adem´as los datos incluyen variables que definen caracter´ısticas de la tienda y su localidad. La tabla de datos est´a formada por 400 filas y 13 columnas. Seguidamente se explican las variables que conforman la tabla.
+
+Cargue la tabla de datos en R y no elimine los NA. En caso de ser necesario, recodificar las variables de forma adecuada. Para medir el error tome un 20 % de la tabla de datos. Realice lo siguiente:
+
+```{r}
+datos <- read.table("datos/AsientosNinno.csv", dec = ".", sep = ";",header = T, stringsAsFactors = T)[,-1]
+datos$CalidadEstant <- factor(datos$CalidadEstant,levels = c("Malo","Medio","Bueno"), ordered=TRUE)
+str(datos)
+
+numero.predictoras <- dim(datos)[2] - 1
+filas <- dim(datos)[1] 
+muestra <- sample(1:filas, floor(filas*0.20))
+ttesting <- datos[muestra,]
+taprendizaje <- datos[-muestra,]
+
+
+#elimino las variables
+taprendizaje <- taprendizaje[,-c(4,13)]
+ttesting <- ttesting[,-c(4,13)]
+
+
+```
+
+## 1. Corra un modelo de Arboles de Regresión incluyendo las variables predictoras adecuadas. Muestre e interprete alguna de las reglas obtenidas. Por último interprete las medidas de error.
+
+
+```{r}
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+
+modelo.rpart <- rpart(Ventas~., data = taprendizaje, control = rpart.control(minsplit = 5, maxdepth = 25))
+
+prediccion1 <- predict(modelo.rpart, ttesting)
+
+Arboles <- indices.precision(ttesting$Ventas,prediccion1,numero.predictoras)
+
+Arboles
+```
+
+El modelo se equivocó un 24% de las veces, el error fue en promedio un 2.35 y la correlación del modelo con los datos es de un 66%
+
+
+
+Reglas obtenidas
+
+
+Las 3 mejores reglas fueron la número 20, 35 y 38 estás separan los datos mejor y tienen la mejor precisión.
+
+```{r}
+print(asRules(modelo.rpart))
+```
+## 2. Ahora genere un modelo de Bosques Aleatorios usando 200 árboles y todas las variables predictoras. Cuáles son las 3 variables más importantes (basado en disminución del RSS). Por último interprete las medidas de error.
+
+```{r}
+library(randomForest)
+
+modelo.randomForest <- randomForest(Ventas~., data =taprendizaje, importance = TRUE, ntree = 200, mtry = 3) 
+
+prediccion2 <- predict(modelo.randomForest, ttesting)
+
+Bosques <- indices.precision(ttesting$Ventas,prediccion2,numero.predictoras)
+
+Bosques
+```
+
+Importancia de variables
+
+```{r}
+ggVarImp(modelo.randomForest)
+```
+las 3 variables más importantes serían Urbano (Si está en zona urbana o no), USA (Si está en EEUU o no)y Educación (Años de educación promedio).
+
+## 3. Ahora genere un modelo de Potenciación usando 200 árboles, pruebe con las diferentes opciones de distribución y escoja la mejor (distribution = gaussian, laplace, bernoulli, adaboost, poisson,...) y todas las variables predictoras. Cuáles son las 3 variables más importantes del mejor modelo. Por último interprete las medidas de error.
+
+
+### Gaussian
+
+```{r}
+library(gbm)
+
+modelo.potenciacion <- gbm(Ventas~., data = taprendizaje, distribution = "gaussian", 
+                interaction.depth = 1, n.trees = 200, shrinkage = 0.1)
+
+prediccion3 <- predict(modelo.potenciacion , ttesting)
+
+Potenciacion.G <- indices.precision(ttesting$Ventas,prediccion3,numero.predictoras)
+
+Potenciacion.G
+```
+
+
+### Laplace
+
+```{r}
+library(gbm)
+
+modelo.potenciacion2 <- gbm(Ventas~., data = taprendizaje, distribution = "laplace", 
+                interaction.depth = 1, n.trees = 200, shrinkage = 0.1)
+
+prediccion4 <- predict(modelo.potenciacion2 , ttesting)
+
+Potenciacion.L <- indices.precision(ttesting$Ventas,prediccion4,numero.predictoras)
+
+Potenciacion.L
+```
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+
+ggplot(summary(modelo.potenciacion,plot=FALSE), aes(x = fct_reorder(var, rel.inf), y = rel.inf, fill = fct_reorder(var, rel.inf))) +
+  geom_bar(stat = "identity", position = "identity", width = 0.1) +
+  labs(title = "Importancia de Variables según Influencia Relativa", y = "Influencia Relativa", x = "") +
+  scale_y_continuous(labels = scales::comma) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+```
+
+Seleccionando la distribución Gaussiana, las 3 mejores variables fueron Precio, CalidadEstant y PrecioCompt.
+
+El mejor modelo fue Gaussian, su correlación fue la más alta con 89.87%, en promedio se equivocó 1.37.
+
+## 4. Prefiere usar un modelo con bajas medidas de error pero poco interpretable o uno con medidas de error un poco mayores pero que es más interpretable ¿Cuál de los modelos de los incisos anteriores le dio mejores resultados en la tabla de testing? ¿Cuál modelo prefiere de los tres? Justifique sus respuestas.
+
+
+Prefieron un modelo con menos variables y más interpretabilidad. EL mejor modelo fue el de Potenciación con distribución Gaussiana. Prefiero el de Potenciación ya que la diferencia entre errores es significativa.
+
+
+# Pregunta 4: [20 puntos] [no usar R] Considere los datos de entrenamiento que se muestran en la siguiente Tabla para un problema de clasificación binaria.
+
+
+## 1. Calcule el índice de Gini para la tabla completa, observe que el 50 % de las filas son de la clase C0 y el 50 % son de la clase C1.
+
+\begin{align*}
+  indice de Gini &=  1- (\dfrac{10}{20})^2 -  (\dfrac{10}{20})^2 \\
+  & = 0.5
+\end{align*}
+
+## 2. Calcule el índice de Gini Split para la variable Género.
+
+\begin{align*}
+  giniFem &= 1 - (\dfrac{4}{10})^2 - (\dfrac{6}{10})^2 \\
+  &= 0.48
+\end{align*}
+
+\begin{align*}
+  giniMasc &= 1 - (\dfrac{4}{10})^2 - (\dfrac{6}{10})^2 \\
+  &= 0.48
+\end{align*}
+
+\begin{align*}
+  giniSlipGenero &= (\dfrac{10}{20})0.48 + (\dfrac{10}{20})0.48 \\
+  &= 0.48
+\end{align*}
+
+## 3. Calcule el índice de Gini Split para la variable Tipo-Carro
+
+\begin{align*}
+  giniDeportivo &= 1 - (\dfrac{8}{8})^2 - (\dfrac{0}{8})^2 \\
+  &= 0
+\end{align*}
+
+\begin{align*}
+  giniFamiliar &= 1 - (\dfrac{1}{4})^2  - (\dfrac{3}{4})^2 \\
+  &= 0.375
+\end{align*}
+
+\begin{align*}
+  giniLujoDeportivo &= 1 - (\dfrac{9}{16})^2 - (\dfrac{7}{16})^2 \\
+  &= 0.4921875
+\end{align*}
+
+\begin{align*}
+  giniSlipTipoCarro &= (\dfrac{4}{20})0.375 + (\dfrac{16}{20})0.4921875 \\
+  &= 0.46875
+\end{align*}
+
+## 4. Calcule el índice de Gini Split para la variable Talla.
+
+\begin{align*}
+  giniExtraGrande &= 1 - (\dfrac{2}{4})^2 - (\dfrac{2}{4})^2 \\
+  &= 0.5
+\end{align*}
+
+\begin{align*}
+  giniGrande &= 1 - (\dfrac{4}{8})^2  - (\dfrac{4}{8})^2 \\
+  &= 0.5
+\end{align*}
+
+\begin{align*}
+  giniMediano &= 1 - (\dfrac{3}{7})^2 -(\dfrac{4}{7})^2 \\
+  &= 0.4897959
+\end{align*}
+
+\begin{align*}
+  giniPequeno &= 1 - (\dfrac{6}{12})^2 -(\dfrac{6}{12})^2 \\
+  &= 0.5
+\end{align*}
+
+\begin{align*}
+  giniSlipTalla &= (\dfrac{8}{20})0.5 + (\dfrac{12}{20})0.5 \\
+  &= 0.5
+\end{align*}
+
+## 5. ¿Cuál variable es mejor Género, Tipo-Carro o Talla?
+
+La variable con menor Gini es TipoCarro, por lo tanto es la mejor.
+
+
 
