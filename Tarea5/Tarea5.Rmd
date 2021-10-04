@@ -101,7 +101,7 @@ Para esto realice lo siguiente:
 ## 1. Cargue la tabla de datos `wine.csv` en `R`.
 
 ```{r}
-datos <- read.table("datos/wine.csv", sep = ",", dec = ".", header = T, stringsAsFactors = T)
+datos <- read.table("../datos/wine.csv", sep = ",", dec = ".", header = T, stringsAsFactors = T)
 ```
 
 ## 2. Usando el comando sample de `R` genere al azar una tabla de testing con una 20 % de los datos y con el resto de los datos genere una tabla de aprendizaje.
@@ -208,9 +208,13 @@ Cargue la tabla de datos en `R`, asegúrese que las variables se están leyendo 
 Recodifique variables en caso de que sea necesario, tome para entrenamiento un 80 % de la tabla de datos. Realice lo siguiente:
 
 ```{r}
-datos <- read.table("datos/DeudaCredito.csv", dec = ".", sep = ",", header = T, stringsAsFactors = T )[,-1]
+library(fastDummies)
 
+datos <- read.table("../datos/DeudaCredito.csv", dec = ".", sep = ",", header = T, stringsAsFactors = T )[,-1]
+
+datos <- dummy_cols(datos, select_columns = c("Genero","Estudiante","Casado","Etnicidad"),remove_selected_columns = T)
 str(datos)
+
 
 numero.predictoras <- dim(datos)[2] - 1
 filas <- dim(datos)[1] 
@@ -302,27 +306,408 @@ g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
 
 ## 3. Corra un modelo de redes neuronales usando 2 capas ocultas con 4 y 3 neuronas respectivamente. Ajuste los parámetros hasta que el modelo alcance convergencia (puede iniciar con umbral de detención como 0.05 y número de iteraciones de 50000).
 
-```{r}
-medias <- sapply(taprendizaje, mean) 
-desviaciones <- sapply(taprendizaje[,-c(7:10)], sd)
-# Se estandarizan los datos, esto se debe hacer de training y testing
-datos.aprendizaje  <- as.data.frame(scale(taprendizaje[,-c(7:10)], center = medias, scale = desviaciones))
-datos.testing <- as.data.frame(scale(ttesting[,-c(7:10)], center = medias, scale = desviaciones))
-# Generamos la fórmula
-nombres <- colnames(datos.aprendizaje)
-formula <- as.formula(paste("lpsa ~", paste(nombres[!nombres %in% c("lpsa")], collapse = " + ")))
-```
-
 
 ```{r}
 library(neuralnet)
 library(traineR)
 # 2 capas
-modelo.nnet2 <- neuralnet(formula, data = taprendizaje, hidden = c( 4, 3), linear.output = TRUE, threshold = 0.05, stepmax = 1e+05) 
+modelo.nnet2 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 4, 3), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
 prediccion.nnet2 <- predict(modelo.nnet2,ttesting)
 
-MC.nnet2 <- confusion.matrix(ttesting, prediccion.nnet2)
 
-indices1 <- indices.general(MC.nnet2)
+
+indices1 <- indices.precision(ttesting$Balance ,prediccion.nnet2[,1],numero.predictoras)
+
+
+indices1
 ```
+
+## 4. La selección anterior no garantiza que sea la mejor. Intente 2 configuraciones de capas ocultas usando 2 capas y las neuronas que guste siempre y cuando no sean más de 10. Muestre los resultados e interprete los errores de la mejor ¿Alguna de estas configuraciones mejora la configuración del inciso anterior?
+
+```{r}
+modelo.nnet3 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 4, 3), linear.output = TRUE, threshold = 0.05, stepmax = 50000)
+
+prediccion.nnet3 <- predict(modelo.nnet3,ttesting)
+
+
+indices3 <- indices.precision(ttesting$Balance ,prediccion.nnet3[,1],numero.predictoras)
+
+
+indices3
+```
+
+```{r}
+modelo.nnet4 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 9,1), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+prediccion.nnet4 <- predict(modelo.nnet4,ttesting)
+
+
+indices4 <- indices.precision(ttesting$Balance ,prediccion.nnet4[,1],numero.predictoras)
+
+
+indices4
+```
+
+No ninguna la mejora.
+
+## 5. Intente 2 configuraciones de capas ocultas usando 3 capas y las neuronas que guste siempre y cuando no sean más de 10. Muestre los resultados e interprete los errores de la mejor ¿Alguna de estas 2 configuraciones mejora la configuración del segundo y tercer inciso?
+
+```{r}
+modelo.nnet5 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 9,6, 3), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+prediccion.nnet5 <- predict(modelo.nnet5,ttesting)
+
+
+indices5 <- indices.precision(ttesting$Balance ,prediccion.nnet5[,1],numero.predictoras)
+
+
+indices5
+```
+
+```{r}
+modelo.nnet6 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 8,6, 4), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+prediccion.nnet6 <- predict(modelo.nnet6,ttesting)
+
+
+indices6 <- indices.precision(ttesting$Balance ,prediccion.nnet6[,1],numero.predictoras)
+
+
+indices6
+```
+
+## 6. Compare los resultados anteriores con los de las tareas anteriores. ¿Cúal es el mejor método para esta tabla de datos?
+
+```{r}
+library(dplyr)
+
+errores <- rbind(as.data.frame(linear),as.data.frame(polynomial),as.data.frame(radial),as.data.frame(sigmoid),as.data.frame(indices2), as.data.frame(indices6))
+
+
+rownames(errores) <- c("SVM.linear"," SVM.polynomial","SVM.radial","SVM.sigmoid", "NeuralNet 2 capas", "NeuralNet 3 capas")
+
+errores
+
+errores %>%
+filter(raiz.error.cuadratico == min(errores$raiz.error.cuadratico))
+```
+
+Tomando como referencia el error cuadrático medio, el mejor modelo fue SVM con núcleo linear.
+
+El promedio de los errores fue 114.024.
+
+La correlación fue de 97.83% la cual es bastante alta, incluso más alta que con el modelo de Regresión Múltiple de la tarea antes que fue de 97.12%.
+
+En promedio el modelo se equivocó en un 12%.
+
+
+# Pregunta 3: __[10 puntos]__ Un cliente nos contrata esta vez para aplicar un modelo no paramétrico con el fin de estudiar una posible oportunidad de negocio, y para ver si le es rentable quiere una predicción de las ventas potenciales de asientos de niños para autos en su tienda. Para ello nos proporciona la tabla de datos `AsientosNinno.csv` que contiene detalles de ventas de asientos de niños para auto en una serie de tiendas similares a las del cliente, y además los datos incluyen variables que definen caracter´ısticas de la tienda y su localidad. La tabla de datos está formada por 400 filas y 13 columnas. Seguidamente se explican las variables que conforman la tabla.
+
+Cargue la tabla de datos en `R` y no elimine los NA. En caso de ser necesario, recodificar las variables de forma adecuada. Para medir el error tome un 20 % de la tabla de datos. Realice lo siguiente:
+
+```{r}
+datos <- read.table("../datos/AsientosNinno.csv", dec = ".", sep = ";",header = T, stringsAsFactors = T)[,-1]
+datos$CalidadEstant <- factor(datos$CalidadEstant,levels = c("Malo","Medio","Bueno"), ordered=TRUE)
+str(datos)
+
+datos <- dummy_cols(datos, select_columns = c("CalidadEstant"),remove_selected_columns = T)
+
+numero.predictoras <- dim(datos)[2] - 1
+filas <- dim(datos)[1] 
+muestra <- sample(1:filas, floor(filas*0.20))
+ttesting <- datos[muestra,]
+taprendizaje <- datos[-muestra,]
+
+
+#elimino las variables
+taprendizaje <- taprendizaje[,-c(4,13)]
+ttesting <- ttesting[,-c(4,13)]
+
+```
+
+## 1. Compare en esta tabla de datos todos los métodos de regresión estudiados hasta ahora en el curso ¿Cuál modelo prefiere? Justifique sus respuestas.
+
+### Linear
+
+```{r}
+library(traineR)
+
+modelo.linear <- train.svm(Ventas~., data = taprendizaje, kernel = "linear")
+prediccion.linear <- predict(modelo.linear, ttesting)
+
+linear <- indices.precision(ttesting$Ventas ,prediccion.linear$prediction,numero.predictoras)
+linear
+```
+
+### Polynomial
+
+```{r}
+modelo.polynomial <- train.svm(Ventas~., data = taprendizaje, kernel = "polynomial")
+prediccion.polynomial <- predict(modelo.polynomial, ttesting)
+
+polynomial <- indices.precision(ttesting$Ventas ,prediccion.polynomial$prediction,numero.predictoras)
+polynomial
+```
+
+### Radial
+
+```{r}
+modelo.radial <- train.svm(Ventas~., data = taprendizaje, kernel = "radial")
+prediccion.radial <- predict(modelo.radial, ttesting)
+
+radial <- indices.precision(ttesting$Ventas ,prediccion.radial$prediction,numero.predictoras)
+radial
+```
+
+### Sigmoid
+
+```{r}
+modelo.sigmoid <- train.svm(Ventas~., data = taprendizaje, kernel = "sigmoid")
+prediccion.sigmoid <- predict(modelo.sigmoid, ttesting)
+
+sigmoid <- indices.precision(ttesting$Ventas ,prediccion.sigmoid$prediction,numero.predictoras)
+sigmoid
+```
+
+### NeuralNet
+
+```{r}
+
+modelo.nnet <- neuralnet(Ventas ~., data = taprendizaje, hidden = c( 8,6), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+prediccion.nnet <- predict(modelo.nnet,ttesting)
+
+
+NNET <- indices.precision(ttesting$Ventas ,prediccion.nnet[,1],numero.predictoras)
+
+
+NNET
+```
+
+```{r}
+errores <- rbind(as.data.frame(linear),as.data.frame(polynomial),as.data.frame(radial),as.data.frame(sigmoid),as.data.frame(NNET))
+
+
+rownames(errores) <- c("SVM.linear"," SVM.polynomial","SVM.radial","SVM.sigmoid", "NeuralNet")
+
+errores
+
+errores %>%
+filter(raiz.error.cuadratico == min(errores$raiz.error.cuadratico))
+```
+
+Tomando como referencia el error cuadrático medio, el mejor modelo fue SVM con núcleo linear.
+
+El promedio de los errores fue 114.024.
+
+La correlación fue de 97.83% la cual es bastante alta, incluso más alta que con el modelo de Regresión Múltiple de la tarea antes que fue de 97.12%.
+
+En promedio el modelo se equivocó en un 12%
+
+
+
+# Pregunta 4
+
+
+# Pregunta 5: __[20 puntos]__ Pruebe que si la función objetivo a minimizar es:
+
+$$
+f(w) = \dfrac{||w||^2}{2} + C\Big(\sum _{i=1}^{n}\xi_i \Big)^2,
+$$
+donde $C$ es un parámetro del modelo, entonces __Lagrangiano Dual__ para la Máquina Vectorial de Soporte lineal con datos no separables es:
+
+$$
+L_D = \sum _{i=1}^{n} \lambda_i - \dfrac{1}{2}\sum_{i,j} \lambda_i \lambda_jy_iy_jx_i\cdot x_j - C\Big(\sum _{i=1}^{n}\xi_i \Big)^2.
+$$
+
+# Pregunta 6: __[10 puntos]__ Represente en un grafo dirigido la Red Neuronal que tiene la siguiente entrada:
+
+$$ \vec{x}  =  \begin{pmatrix}
+2 \\
+3 \\
+-1 \\
+2
+\end{pmatrix}
+$$
+Tiene la siguientes matrices de pesos
+
+$$
+W_{1} = \begin{pmatrix}
+2 & 3 & 0 & 1 \\
+4 & 3 & 2 & 0 \\
+1 & 1 & 1 & 2 \\
+\end{pmatrix}, \quad  W_{2} = \begin{pmatrix}
+1 & 7 & 1 \\
+7 & 1 & 4  \\
+\end{pmatrix}
+$$
+
+
+Tiene el siguiente bías
+$$
+\vec{b} = \begin{pmatrix}
+-6 \\
+-2
+\end{pmatrix}
+$$
+
+Además, use la siguiente función de activación en todas las neuronas:
+
+$$
+g(x) = \dfrac{1}{1+e^{-x}}
+$$
+
+$ y = g(W_1 \cdot\vec{x})$
+
+$=g\Bigg(\begin{pmatrix}
+2 & 3 & 0 & 1 \\
+4 & 3 & 2 & 0 \\
+1 & 1 & 1 & 2 \\
+\end{pmatrix}$
+
+$\begin{pmatrix}
+2 \\
+3 \\
+-1 \\
+2
+\end{pmatrix} \Bigg)$
+
+=  $ g \begin{pmatrix}
+15 \\
+15 \\
+8
+\end{pmatrix}   = \begin{pmatrix}
+0.9999 \\
+0.9999 \\
+0.9996
+\end{pmatrix}$
+
+$ z = g(W_2 \cdot\vec{y} + \vec{b})$
+
+$ = g \Bigg( \begin{pmatrix}
+1 & 7 & 1 \\
+7 & 1 & 4  \\
+\end{pmatrix} $
+$\begin{pmatrix}
+0.9999 \\
+0.9999 \\
+0.9996
+\end{pmatrix} $
+$ + \begin{pmatrix}
+-6 \\
+-2
+\end{pmatrix} \Bigg) $ 
+=  $ g \Bigg( \begin{pmatrix}
+\dfrac{22497}{2500} \\
+\dfrac{14997}{1250} 
+\end{pmatrix} $ 
+$ + \begin{pmatrix}
+-6 \\
+-2
+\end{pmatrix} \Bigg)$
+
+$ g\begin{pmatrix}
+2.9987 \\
+9.9976
+\end{pmatrix}$ =
+$\begin{pmatrix}
+0.9525 \\
+0.9999
+\end{pmatrix}$
+
+
+<center>
+![](grafoDirigido.png)
+</center>
+
+
+# Pregunta 7: [no usar traineR, nnet ni neuralnet] [20 puntos] Para la Tabla de Datos que se muestra seguidamente donde $x^j$ para $j = 1, 2, 3$ son las variables predictoras y la variable a
+predecir es $z$ diseñe una Red Neuronal de una capa (Perceptron):
+
+![](tabla.png)
+
+
+Es decir, encuentre todos los posibles pesos  $x_1,w_2,w_3$  y umbrales $\theta$ para la Red Neuronal que se muestra en el siguiente gráfico:
+
+![](neurona.png)
+
+Use una función de activación tipo $tanh(x)$, es decir:
+
+$$f(x) = \tanh(x) = \dfrac{e^{x} - e^{-x}}{e^{x} + e^{-x}}$$
+Para esto escriba una Clase en `Python` que incluya los métodos necesarios pra implementar esta Red Neuronal.
+Se deben hacer variar los pesos $w_j$ con $j = 1,2,3$ en los siguientes valores `v=(-1,-0.9,-0.8,...,0,...,0.8,0.9,1)` y haga variar θ en `u=(0,0.1,...,0.8,0.9,1)`. Escoja los pesos $w_j$ con $j = 1, 2, 3$ y el umbral θ de manera que se minimiza el error cuadrático medio:
+
+$$E(w_1,w_2,w_3) = \dfrac{1}{4} \sum_{i=1}^{4}\Big[ I\Big[ f\Big(\sum_{j=1}^{3}w_j \cdot x_{i}^{j} - θ \Big)\Big] - z_i\Big]^2 $$
+
+donde $x_i^j$ es la entrada en la fila $i$ de la variable $x^j$ e $I(z)$ se define como sigue:
+
+
+$$ I(t) = 
+  \begin{cases}
+            1 & \text{si $t \geq 0$} \\
+            0 & \text{si $t < 0$}
+  \end{cases} 
+$$
+
+
+```{r cache=TRUE}
+
+x1 <- c(1,1,1,1)
+x2 <- c(0,0,1,1)
+x3 <- c(0,1,0,1)
+z <- c(1,1,1,0)
+
+
+tabla <- data.frame(x1,x2,x3,z)
+
+#función de activación
+tangenteHiperb <- function(x){
+  
+  y <- 2/(1+exp(-2*x)) - 1
+  
+  return(y)
+} 
+
+I <- function(t){
+  if(t >= 0){
+    return(1)
+  }else {
+    return(0)
+  }
+}
+
+#Pesos
+v <- seq(-1,1,0.1)
+u <- seq(0,1,0.1) 
+
+error <- data.frame()
+  
+  
+  
+for (omega in u) {
+  for (w1 in v) {
+    for (w2 in v) {
+      for (w3 in v) {
+        s <- 0
+        for (i in 1:4) {
+          
+          s <- s + (I(tangenteHiperb(w1*tabla[i,1] - omega + w2*tabla[i,2] - omega + w3*tabla[i,3] - omega)) - tabla[i,4])^2
+        }
+        
+        error <- rbind(error,data.frame(w1,w2,w3,omega,s/4))
+      }  
+    }
+    }
+  }
+
+
+```
+
+Pesos y umbral que minimizan el error
+
+```{r}
+
+names(error)[5] <- c("Error")
+
+error%>%filter(Error == 0)
+```
+
+ 
+
 
