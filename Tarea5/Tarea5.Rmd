@@ -304,84 +304,132 @@ g <- plot.real.prediccion(ttesting$Balance, prediccion.sigmoid$prediction , mode
 g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
 ```
 
+
+
 ## 3. Corra un modelo de redes neuronales usando 2 capas ocultas con 4 y 3 neuronas respectivamente. Ajuste los parámetros hasta que el modelo alcance convergencia (puede iniciar con umbral de detención como 0.05 y número de iteraciones de 50000).
+
 
 
 ```{r}
 library(neuralnet)
 library(traineR)
-# 2 capas
-modelo.nnet2 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 4, 3), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
-prediccion.nnet2 <- predict(modelo.nnet2,ttesting)
+numero.predictoras <- dim(datos)[2] - 1
+
+# Calcula el modelo usando solo los datos de training
+# Se deben guardar las medias y las desviaciones
+medias <- sapply(taprendizaje, mean) 
+desviaciones <- sapply(taprendizaje, sd)
+# Se estandarizan los datos, esto se debe hacer de training y testing
+taprendizaje.e  <- as.data.frame(scale(taprendizaje, center = medias, scale = desviaciones))
+ttesting.e <- as.data.frame(scale(ttesting, center = medias, scale = desviaciones))
+# Generamos la fórmula
+nombres <- colnames(taprendizaje.e)
+formula <- as.formula(paste("Balance ~", paste(nombres[!nombres %in% c("Balance")], collapse = " + ")))
+# Generamos modelo. No acepta la notación lpsa~.
+# Los parámetros a modificar son hidden, threshold y stepmax
+# hidden = c(6, 4, 3) => 3 capas ocultas una con 6 neuronas; otra con 4 neuronas y otra con 3 neuronas
+modelo.red <- neuralnet(formula, data = taprendizaje.e, hidden = c(4,3), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+# Plotea la red
+plot(modelo.red, rep = "best", col.entry = "red", col.out = "green", arrow.length = 0.2)
 
 
-
-indices1 <- indices.precision(ttesting$Balance ,prediccion.nnet2[,1],numero.predictoras)
-
-
+# Predicción
+# Primero se obtiene la predicción estandarizada
+prediccion.nnet2 <- neuralnet::compute(modelo.red, ttesting.e[, -which(colnames(ttesting.e) == "Balance")])$net.result
+# Luego se calcula la predicción final "des-estandarizando" los resultados
+prediccion.nnet2 <- prediccion.nnet2 * desviaciones["Balance"] + medias["Balance"]
+# Medición de precisión
+indices1 <- indices.precision(ttesting$Balance, prediccion.nnet2,numero.predictoras)
 indices1
 ```
+
 
 ## 4. La selección anterior no garantiza que sea la mejor. Intente 2 configuraciones de capas ocultas usando 2 capas y las neuronas que guste siempre y cuando no sean más de 10. Muestre los resultados e interprete los errores de la mejor ¿Alguna de estas configuraciones mejora la configuración del inciso anterior?
 
 ```{r}
-modelo.nnet3 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 4, 3), linear.output = TRUE, threshold = 0.05, stepmax = 50000)
-
-prediccion.nnet3 <- predict(modelo.nnet3,ttesting)
-
-
-indices3 <- indices.precision(ttesting$Balance ,prediccion.nnet3[,1],numero.predictoras)
+modelo.red <- neuralnet(formula, data = taprendizaje.e, hidden = c(4,2), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+# Plotea la red
+plot(modelo.red, rep = "best", col.entry = "red", col.out = "green", arrow.length = 0.2)
 
 
+# Predicción
+prediccion.nnet3 <- neuralnet::compute(modelo.red, ttesting.e[, -which(colnames(ttesting.e) == "Balance")])$net.result
+
+prediccion.nnet3 <- prediccion.nnet3 * desviaciones["Balance"] + medias["Balance"]
+
+# Medición de precisión
+indices3 <- indices.precision(ttesting$Balance, prediccion.nnet3,numero.predictoras)
 indices3
 ```
 
 ```{r}
-modelo.nnet4 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 9,1), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
-prediccion.nnet4 <- predict(modelo.nnet4,ttesting)
+modelo.red <- neuralnet(formula, data = taprendizaje.e, hidden = c(6,3), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+# Plotea la red
+plot(modelo.red, rep = "best", col.entry = "red", col.out = "green", arrow.length = 0.2)
 
 
-indices4 <- indices.precision(ttesting$Balance ,prediccion.nnet4[,1],numero.predictoras)
+# Predicción
 
+prediccion.nnet4 <- neuralnet::compute(modelo.red, ttesting.e[, -which(colnames(ttesting.e) == "Balance")])$net.result
 
+prediccion.nnet4 <- prediccion.nnet4 * desviaciones["Balance"] + medias["Balance"]
+# Medición de precisión
+indices4 <- indices.precision(ttesting$Balance, prediccion.nnet4,numero.predictoras)
 indices4
+
 ```
 
-No ninguna la mejora.
+Ambas mejoran al aumentar la cantidad de neuronas dentro de la red.
 
 ## 5. Intente 2 configuraciones de capas ocultas usando 3 capas y las neuronas que guste siempre y cuando no sean más de 10. Muestre los resultados e interprete los errores de la mejor ¿Alguna de estas 2 configuraciones mejora la configuración del segundo y tercer inciso?
 
 ```{r}
-modelo.nnet5 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 9,6, 3), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
-prediccion.nnet5 <- predict(modelo.nnet5,ttesting)
+modelo.red <- neuralnet(formula, data = taprendizaje.e, hidden = c(8,4,2), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+# Plotea la red
+plot(modelo.red, rep = "best", col.entry = "red", col.out = "green", arrow.length = 0.2)
 
 
-indices5 <- indices.precision(ttesting$Balance ,prediccion.nnet5[,1],numero.predictoras)
+# Predicción
+
+prediccion.nnet5 <- neuralnet::compute(modelo.red, ttesting.e[, -which(colnames(ttesting.e) == "Balance")])$net.result
+
+prediccion.nnet5 <- prediccion.nnet5 * desviaciones["Balance"] + medias["Balance"]
+
+indices5 <- indices.precision(ttesting$Balance, prediccion.nnet5,numero.predictoras)
+
 
 
 indices5
 ```
 
 ```{r}
-modelo.nnet6 <- neuralnet(Balance ~., data = taprendizaje, hidden = c( 8,6, 4), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
-prediccion.nnet6 <- predict(modelo.nnet6,ttesting)
+modelo.red <- neuralnet(formula, data = taprendizaje.e, hidden = c(9,6,3), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+# Plotea la red
+plot(modelo.red, rep = "best", col.entry = "red", col.out = "green", arrow.length = 0.2)
 
 
-indices6 <- indices.precision(ttesting$Balance ,prediccion.nnet6[,1],numero.predictoras)
+# Predicción
 
+prediccion.nnet6 <- neuralnet::compute(modelo.red, ttesting.e[, -which(colnames(ttesting.e) == "Balance")])$net.result
+
+prediccion.nnet6 <- prediccion.nnet6 * desviaciones["Balance"] + medias["Balance"]
+# Medición de precisión
+indices6 <- indices.precision(ttesting$Balance, prediccion.nnet6,numero.predictoras)
 
 indices6
 ```
+
+Ambas son buenas predicciones aunque disminuye su correlación en comparación a la configuración de solo 2 capas.
 
 ## 6. Compare los resultados anteriores con los de las tareas anteriores. ¿Cúal es el mejor método para esta tabla de datos?
 
 ```{r}
 library(dplyr)
 
-errores <- rbind(as.data.frame(linear),as.data.frame(polynomial),as.data.frame(radial),as.data.frame(sigmoid),as.data.frame(indices2), as.data.frame(indices6))
+errores <- rbind(as.data.frame(linear),as.data.frame(polynomial),as.data.frame(radial),as.data.frame(sigmoid),as.data.frame(indices4))
 
 
-rownames(errores) <- c("SVM.linear"," SVM.polynomial","SVM.radial","SVM.sigmoid", "NeuralNet 2 capas", "NeuralNet 3 capas")
+rownames(errores) <- c("SVM.linear"," SVM.polynomial","SVM.radial","SVM.sigmoid", "NeuralNet 2 capas")
 
 errores
 
@@ -389,13 +437,13 @@ errores %>%
 filter(raiz.error.cuadratico == min(errores$raiz.error.cuadratico))
 ```
 
-Tomando como referencia el error cuadrático medio, el mejor modelo fue SVM con núcleo linear.
+Tomando como referencia el error cuadrático medio, el mejor modelo fue el de NeuralNet con dos capas de 6 y 3 neuronas.
 
-El promedio de los errores fue 114.024.
+El promedio de los errores fue 582.98.
 
-La correlación fue de 97.83% la cual es bastante alta, incluso más alta que con el modelo de Regresión Múltiple de la tarea antes que fue de 97.12%.
+La correlación fue de 97.83% la cual es bastante alta, incluso más alta que con el modelo de Regresión Múltiple de la tarea antes que fue de 99.89%.
 
-En promedio el modelo se equivocó en un 12%.
+En promedio el modelo se equivocó en un 2,96%.
 
 
 # Pregunta 3: __[10 puntos]__ Un cliente nos contrata esta vez para aplicar un modelo no paramétrico con el fin de estudiar una posible oportunidad de negocio, y para ver si le es rentable quiere una predicción de las ventas potenciales de asientos de niños para autos en su tienda. Para ello nos proporciona la tabla de datos `AsientosNinno.csv` que contiene detalles de ventas de asientos de niños para auto en una serie de tiendas similares a las del cliente, y además los datos incluyen variables que definen caracter´ısticas de la tienda y su localidad. La tabla de datos está formada por 400 filas y 13 columnas. Seguidamente se explican las variables que conforman la tabla.
@@ -469,14 +517,36 @@ sigmoid
 ### NeuralNet
 
 ```{r}
+library(neuralnet)
+library(traineR)
 
-modelo.nnet <- neuralnet(Ventas ~., data = taprendizaje, hidden = c( 8,6), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
-prediccion.nnet <- predict(modelo.nnet,ttesting)
+numero.predictoras <- dim(datos)[2] - 1
+
+# Calcula el modelo usando solo los datos de training
+# Se deben guardar las medias y las desviaciones
+medias <- sapply(taprendizaje, mean) 
+desviaciones <- sapply(taprendizaje, sd)
+# Se estandarizan los datos, esto se debe hacer de training y testing
+taprendizaje.e  <- as.data.frame(scale(taprendizaje, center = medias, scale = desviaciones))
+ttesting.e <- as.data.frame(scale(ttesting, center = medias, scale = desviaciones))
+# Generamos la fórmula
+nombres <- colnames(taprendizaje.e)
+formula <- as.formula(paste("Ventas ~", paste(nombres[!nombres %in% c("Ventas")], collapse = " + ")))
 
 
-NNET <- indices.precision(ttesting$Ventas ,prediccion.nnet[,1],numero.predictoras)
+modelo.red <- neuralnet(formula, data = taprendizaje.e, hidden = c(4,2), linear.output = TRUE, threshold = 0.05, stepmax = 50000) 
+# Plotea la red
+
+plot(modelo.red, rep = "best", col.entry = "red", col.out = "green", arrow.length = 0.2)
 
 
+# Predicción
+# Primero se obtiene la predicción estandarizada
+prediccion.nnet <- neuralnet::compute(modelo.red, ttesting.e[, -which(colnames(ttesting.e) == "Ventas")])$net.result
+# Luego se calcula la predicción final "des-estandarizando" los resultados
+prediccion.nnet <- prediccion.nnet * desviaciones["Ventas"] + medias["Ventas"]
+# Medición de precisión
+NNET <- indices.precision(ttesting$Ventas, prediccion.nnet,numero.predictoras)
 NNET
 ```
 
@@ -494,15 +564,129 @@ filter(raiz.error.cuadratico == min(errores$raiz.error.cuadratico))
 
 Tomando como referencia el error cuadrático medio, el mejor modelo fue SVM con núcleo linear.
 
-El promedio de los errores fue 114.024.
+El promedio de los errores fue 0.87.
 
 La correlación fue de 97.83% la cual es bastante alta, incluso más alta que con el modelo de Regresión Múltiple de la tarea antes que fue de 97.12%.
 
-En promedio el modelo se equivocó en un 12%
+En promedio el modelo se equivocó en un 10%
 
 
 
 # Pregunta 4
+
+![](tabla2.png)
+
+Puede observar los puntos con el siguiente código:
+library ( p l o t l y )
+datos <− data.frame ( x = c ( 1 , 1 , 1 , 3 , 1 , 3 , 1 , 3 , 1 ) ,
+  y = c ( 0 , 0 , 1 , 1 , 1 , 2 , 2 , 2 , 1 ) ,
+  z = c ( 1 , 2 , 2 , 4 , 3 , 3 , 1 , 1 , 0 ) ,
+  c l a s e = c ( ”Rojo” , ”Rojo” , ”Rojo” ,
+                ”Rojo” , ”Rojo” , ”Azul” ,
+                ”Azul” , ”Azul” , ”Azul” ) )
+                
+plot_ly (data = datos ) %> %
+  add trace ( x = ˜x , y = ˜y , z = ˜z , c o l o r = ˜ cl a s e ,
+          colors = c ( ”#0C4B8E” , ”#BF382A” ) ,
+          mode = ” markers ” , type = ” s c a t t e r 3 d ” )
+
+Realice lo siguiente:
+
+## 1. Dibuje con colores los puntos de ambas clases en $\mathbb{R}^3$
+
+```{r}
+library(plotly)
+Datos <- data.frame ( x = c(1 , 1 , 1 , 3 , 1 , 3 , 1 , 3 , 1) ,y = c(0 , 0 , 1 , 1 , 1 , 2 , 2 , 2 , 1) , z = c(1 , 2 , 2 , 4 , 3 , 3 , 1 , 1 , 0) ,clase = c(" Rojo ", " Rojo ", " Rojo "," Rojo ", " Rojo ", " Azul "," Azul ", " Azul ", " Azul ")) 
+plot_ly(data = Datos) %>% add_trace ( x = ~x , y = ~y , z = ~z , color = ~clase , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "scatter3d")
+```
+
+## 2. Dibuje el hiperplano óptimo de separación e indique la ecuación de dicho hiperplano de la forma $ax + by + cz + d = 0$. Nota: Se debe observar con detenimiento los puntos de ambas clases para encontrar los vectores de soporte de cada margen y trazar con estos puntos los
+hiperplanos de los márgenes luego trazar el hiperplano de soporte justo en el centro.
+
+```{r}
+Datos2 <- data.frame ( x = c(1 , 1 , 3 ) ,y = c(0 , 1 , 1 ) , z = c(1 , 2 , 4 )) 
+Datos3 <- data.frame ( x = c(1 , 1 , 3 ) ,y = c(1 , 2 , 2 ) , z = c(0 , 1 , 3 )) 
+Datos4<-data.frame ( x = c(1 , 1 , 3 ) ,y = c(0.5 , 1.5 , 1.5 ) , z = c(0.5 , 1.5 , 3.5 ))
+
+plot_ly(data = Datos) %>% add_trace ( x = ~x , y = ~y , z = ~z , color = ~clase , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "scatter3d") %>% add_trace(data = Datos2, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d",showlegend=FALSE) %>% add_trace(data = Datos3, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d" ,   showlegend=FALSE) %>% add_trace(data = Datos4, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d" ,   showlegend=FALSE)
+```
+
+## 3. Escriba la regla de clasificación para el clasificador con margen máximo. Debe ser algo como lo siguiente: $w = (w1, w2, w3)$ se clasifica como *Rojo* si $ax + by + cz + d > 0$ y otro caso se clasifica como *Azul*.
+
++ $w = (w1, w2, w3)$ se clasifica como *Rojo* si $2x + 2y - 2z - 2$ > 0, en cualquier otro caso seria *Azul*.
+
+## 4. Indique el margen para el hiperplano óptimo y los vectores de soporte.
+
+```{r}
+library(pracma)
+vector.cross <- function(a, b) {
+    return (cross(a,b))
+}
+
+p<-c(1 , 0.5 , 0.5) 
+q<- c(1 , 1.5 , 1.5 ) 
+r<-c(3 , 1.5 , 3.5 )
+pq<-q-p
+pr<-r-p
+
+vector.cross(pq, pr) 
+
+#El margen para el hiperplano optimo es de 1.
+#Los vectores de soporte serian:
+vector1 <- cross(c(1 , 1 , 3 ) , c(0 , 1 , 1 ))
+vector1
+
+vector2 <- cross(c(1 , 2 , 2 )  , c(0 , 1 , 3 ))
+vector2
+```
+
+## 5. Explique por qué un ligero movimiento de la octava observación no afectaría el hiperplano de margen máximo.
+
+Por que ese  punto no fue utilizado para sacar el hiperplano óptimo por lo cual no afectaría.
+
+
+## 6. Dibuje un hiperplano que no es el hiperplano óptimo de separación y proporcione la ecuación para este hiperplano.
+
+```{r}
+Datos4<-data.frame ( x = c(1 , 1 , 3 ) ,y = c(0 , 1 , 1 ) , z = c(0.5 , 1.5 , 3.5 )) 
+plot_ly(data = Datos) %>% add_trace ( x = ~x , y = ~y , z = ~z , color = ~clase , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "scatter3d") %>% add_trace(data = Datos2, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d",showlegend=FALSE) %>% add_trace(data = Datos3, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d" ,   showlegend=FALSE) %>% add_trace(data = Datos4, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d" ,   showlegend=FALSE) 
+```
+
+```{r}
+p<-c(1 , 0 , 0.5 )
+q<- c(1, 1 , 1.5 ) 
+r<-c(3 , 1 , 3.5 )
+pq<-q-p
+pr<-r-q
+
+vector.cross(pq, pr) 
+```
+
+## 7. Dibuje un hiperplano de separación pero que no es el hiperplano óptimo de separación, y escriba la ecuación correspondiente.
+
+```{r}
+Datos4<-data.frame ( x = c(0 , 0 , 2 ) ,y = c( 0.1, 1.1 , 1.1 ) , z = c(0.5 , 1.5 , 3.5 )) 
+plot_ly(data = Datos) %>% add_trace ( x = ~x , y = ~y , z = ~z , color = ~clase , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "scatter3d") %>% add_trace(data = Datos2, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d",showlegend=FALSE) %>% add_trace(data = Datos3, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d" ,   showlegend=FALSE) %>% add_trace(data = Datos4, x = ~x , y = ~y , z = ~z ,  mode = 'lines', type = "scatter3d" ,   showlegend=FALSE) 
+```
+
+```{r}
+p<-c(0 , 0.1 , 0.5 )
+q<- c( 0, 1.1 , 1.5 ) 
+r<-c(2 , 1.1 , 3.5 )
+pq<-q-p
+pr<-r-p
+vector.cross(pq, pr)
+```
+
+## 8. Dibuje una observación adicional de manera que las dos clases ya no sean separables por un hiperplano.
+
+```{r}
+Datos <- data.frame ( x = c(1 , 1 , 1 , 3 , 1 , 3 , 1 , 3 , 1, 2) ,y = c(0 , 0 , 1 , 1 , 1 , 2 , 2 , 2 , 1, 4) , z = c(1 , 2 , 2 , 4 , 3 , 3 , 1 , 1 , 0, 2) ,clase = c(" Rojo ", " Rojo ", " Rojo "," Rojo ", " Rojo ", " Azul "," Azul ", " Azul ", " Azul "," Rojo ")) 
+
+plot_ly(data = Datos) %>% add_trace ( x = ~x , y = ~y , z = ~z , color = ~clase , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "scatter3d")
+
+
+```
 
 
 # Pregunta 5: __[20 puntos]__ Pruebe que si la función objetivo a minimizar es:
@@ -515,6 +699,8 @@ donde $C$ es un parámetro del modelo, entonces __Lagrangiano Dual__ para la Má
 $$
 L_D = \sum _{i=1}^{n} \lambda_i - \dfrac{1}{2}\sum_{i,j} \lambda_i \lambda_jy_iy_jx_i\cdot x_j - C\Big(\sum _{i=1}^{n}\xi_i \Big)^2.
 $$
+
+
 
 # Pregunta 6: __[10 puntos]__ Represente en un grafo dirigido la Red Neuronal que tiene la siguiente entrada:
 
@@ -708,6 +894,260 @@ names(error)[5] <- c("Error")
 error%>%filter(Error == 0)
 ```
 
+# Pregunta 8: __[10 puntos]__ Usando el algoritmo del Descenso de Gradiente encuentre “a mano” un mínimo local de la siguiente función en el intervalo $[−1, 4]$, use el punto de partida que considere adecuados. Luego grafique y verifique los resultados con código `R`.
  
+$$
+f(x) = 3x^4 - 16x^3 + 18x^2
+$$
 
++ "A mano"
+Tome $x_0$ y note que $f'(x) = 12x^3 - 48x^2 + 36x$
+
+__Paso 1 __
+
+$f(x_0) = 3(2)^4 - 16(2)^3 +18(2)^2 = -8$
+
+__Paso 2__
+
+$f'(x_0) = f'(2) = -24 $
+
+__Paso 3__
+
+Tomanto $\eta = 0.05$
+
+$x_1 = x_0 - \eta \cdot f'(x_0) = 2 - 0.05 \cdot -24 = 3.2$
+
+$\Rightarrow f(x_1) = f(3.2)= -25.3952$
+
+Tenemos el par $(3.2,-25.3952)$
+
++ En `R`
+
+```{r}
+funcion <- function(x){
+  3 * x^4 -16 * x^3 + 18 * x^2
+}
+
+t1 <- c(-5.0,5.0,0.1)
+
+x = 2.0
+y = funcion(x)
+
+ggplot()+
+  xlim(-5.0,5.0)+
+  ylim(-45,45)+ 
+  geom_function(fun = funcion)+
+  geom_point(aes(x=x,y=y), colour = "red")+
+  theme_minimal()
+
+```
+
+```{r}
+derivada <- function(x){
+  12*x^3 - 48*x^2 + 36*x
+}
+
+pendiente <- derivada(x)
+pendiente
+
+eta = 0.05
+
+x[2]<- x - eta*pendiente
+
+y[2] <- funcion(x[2])
+
+ggplot()+
+  xlim(-1.0,5.0)+
+  ylim(-45,45)+ 
+  geom_function(fun = funcion)+
+  geom_point(aes(x=x,y=y), colour = "red")+
+  theme_minimal()
+```
+
+# Pregunta 9: __[10 puntos]__ Usando el algoritmo del Descenso de Gradiente encuentre “a mano” el mínimo global de la siguiente función, use un punto de partida que considere adecuado. Luego grafique y verifique los resultados con código `R`.
+
+$$
+f(x,y) = x^2 + y^2 -2x-6y+14
+$$
+
+Note que $f_x(x,y) = 2x -2$ y $f_y(x,y)= 2y -6$
+
+$\nabla f = 
+\begin{bmatrix}
+2x - 2 \\
+2y -6
+\end{bmatrix}$
+
+Sea $x_0 = 
+\begin{bmatrix}
+-5 \\
+5
+\end{bmatrix}.
+$ Entonces $f(x_0) = 44 $
+
+
+Tomando $\eta = 0.1$
+
+$x_1 = x_0 - \eta \cdot f'(x_0) = \begin{bmatrix}
+-5 \\
+5
+\end{bmatrix} - 0.1 \cdot \begin{bmatrix}
+-12 \\
+4
+\end{bmatrix} = \begin{bmatrix}
+-3.8 \\
+4.6
+\end{bmatrix}$
+
+$\Rightarrow f(x_1) = f\Big(\begin{bmatrix}
+-3.8 \\
+4.6
+\end{bmatrix}\Big)= -29.5999$
+
+
+```{r}
+funcion <- function(x,y){
+  x^2 + y^2 - 2*x - 6*y + 14
+}
+
+
+x = -5
+y = 5
+
+x0 = c(x,y)
+x0
+
+fx0 <- funcion(x,y)
+fx0
+
+
+gradiente <- function(x,y){
+  c(2*x -2 , 2*y -6)
+}
+
+gradiente_f <- gradiente(-5,5) 
+gradiente_f
+eta = 0.1
+x1 = x0 - eta * gradiente(-5,5)
+
+x1
+
+z = funcion(x1[1],x1[2])
+z
+
+xi = c(x,y)
+
+
+for(i in c(1,2)){
+  xi = xi -eta * gradiente(xi[1],xi[2])
+  
+  x = append(x,xi[1])
+  
+  y= append(y,xi[2])
+
+  z = append(z, funcion(xi[1],xi[2]))
+  }
+
+x[2]
+y[2]
+z[2]
+
+data = data.frame(x=seq(-3,3,by=0.05),y=seq(-3,3,0.05),z=funcion(seq(-3,3,by=0.05),seq(-3,3,by=0.05)))
+
+plot_ly() %>% add_trace (data = data, x = data$x , y=  data$y  , z = data$z , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "mesh3d")
+```
+
+# Ejercicio 10: __[5 puntos]__ Usando el algoritmo del Descenso de Gradiente encuentre “a mano” un mínimo local de la siguiente función, use el punto de partida que considere adecuados. Luego grafique y verifique los resultados con código `Python`.
+
+$$
+f(x,y) = x^4 + y^4 -4xy+1
+$$
+
++ A mano
+
+Note que $f_x(x,y) = 4x^3 -4y$ y $f_y(x,y)= 4y^3 -4x$
+
+$\nabla f = 
+\begin{bmatrix}
+4x^3 - 4y \\
+4y^3 - 4x
+\end{bmatrix}$
+
+Sea $x_0 = 
+\begin{bmatrix}
+-0.5 \\
+0.5
+\end{bmatrix}.
+$ Entonces $f(x_0) = 2.125 $
+
+
+Tomando $\eta = 0.1$
+
+$x_1 = x_0 - \eta \cdot f'(x_0) = \begin{bmatrix}
+-0.5 \\
+0.5
+\end{bmatrix} - 0.1 \cdot \begin{bmatrix}
+-2.5 \\
+2.5
+\end{bmatrix} = \begin{bmatrix}
+-0.25 \\
+0.25
+\end{bmatrix}$
+
+$\Rightarrow f(x_1) = f\Big(\begin{bmatrix}
+-0.25 \\
+0.25
+\end{bmatrix}\Big)= 1.2578$
+
+
+```{r}
+funcion <- function(x,y){
+  x^4 + y^4 - 4*x*y + 1
+}
+
+
+x = -0.5
+y = 0.5
+
+x0 = c(x,y)
+x0
+
+fx0 <- funcion(x,y)
+fx0
+
+
+gradiente <- function(x,y){
+  c(4*x^3 - 4*y , 4*y^3 - 4*x)
+}
+
+gradiente_f <- gradiente(x,y) 
+gradiente_f
+eta = 0.1
+x1 = x0 - eta * gradiente(x,y)
+
+x1
+
+z = funcion(x1[1],x1[2])
+z
+
+xi = c(x,y)
+
+
+for(i in c(1,2)){
+  xi = xi -eta * gradiente(xi[1],xi[2])
+  
+  x = append(x,xi[1])
+  
+  y= append(y,xi[2])
+
+  z = append(z, funcion(xi[1],xi[2]))
+  }
+
+x[2]
+y[2]
+z[2]
+
+
+plot_ly() %>% add_trace ( x = ~x , y = ~y , z = ~z , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "scatter3d", xlim(-10,10),ylim(-10,10))
+```
 
