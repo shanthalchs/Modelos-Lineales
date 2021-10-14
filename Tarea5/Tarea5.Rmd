@@ -924,6 +924,7 @@ Tenemos el par $(3.2,-25.3952)$
 + En `R`
 
 ```{r}
+library(ggplot2)
 funcion <- function(x){
   3 * x^4 -16 * x^3 + 18 * x^2
 }
@@ -953,9 +954,9 @@ pendiente
 eta = 0.05
 
 x[2]<- x - eta*pendiente
-
+x
 y[2] <- funcion(x[2])
-
+y
 ggplot()+
   xlim(-1.0,5.0)+
   ylim(-45,45)+ 
@@ -1006,6 +1007,10 @@ $\Rightarrow f(x_1) = f\Big(\begin{bmatrix}
 
 
 ```{r}
+library(dplyr)
+library(plotly)
+library(pracma)
+
 funcion <- function(x,y){
   x^2 + y^2 - 2*x - 6*y + 14
 }
@@ -1046,15 +1051,37 @@ for(i in c(1,2)){
   y= append(y,xi[2])
 
   z = append(z, funcion(xi[1],xi[2]))
-  }
+}
 
-x[2]
-y[2]
-z[2]
 
-data = data.frame(x=seq(-3,3,by=0.05),y=seq(-3,3,0.05),z=funcion(seq(-3,3,by=0.05),seq(-3,3,by=0.05)))
+datos = data.frame(X=x,Y=y,Z=z)
+datos
 
-plot_ly() %>% add_trace (data = data, x = data$x , y=  data$y  , z = data$z , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "mesh3d")
+xdata = seq(-10,10,by=0.1)
+ydata = seq(-10,10,by= 0.1)
+  
+  
+X = data$X
+Y = data$Y
+
+data = meshgrid(xdata,ydata)
+
+Z =  X^2 +  Y^2 - 2*X - 6*Y + 14
+
+
+plot_ly(x = X, y = Y, z = Z)%>%
+  add_surface()%>%
+  add_trace(datos,type = "scatter3d", mode="markers", x =
+              ~x, y = ~y, z = ~z)
+
+
+
+
+
+
+
+
+
 ```
 
 # Ejercicio 10: __[5 puntos]__ Usando el algoritmo del Descenso de Gradiente encuentre “a mano” un mínimo local de la siguiente función, use el punto de partida que considere adecuados. Luego grafique y verifique los resultados con código `Python`.
@@ -1141,13 +1168,33 @@ for(i in c(1,2)){
   y= append(y,xi[2])
 
   z = append(z, funcion(xi[1],xi[2]))
-  }
-
-x[2]
-y[2]
-z[2]
+}
 
 
-plot_ly() %>% add_trace ( x = ~x , y = ~y , z = ~z , colors = c("#0C4B8E", "#BF382A") , mode = "markers", type = "scatter3d", xlim(-10,10),ylim(-10,10))
+datos = data.frame(X=x,Y=y,Z=z)
+datos
+
+xdata = seq(-10,10,by=0.1)
+ydata = seq(-10,10,by= 0.1)
+  
+  
+X = data$X
+Y = data$Y
+
+data = meshgrid(xdata,ydata)
+
+Z =  X^4 +  Y^4 - 4*X*Y + 1
+
+
+plot_ly(x = X, y = Y, z = Z)%>%
+  add_surface()%>%
+  add_trace(datos,type = "scatter3d", mode="markers", x =
+              ~x, y = ~y, z = ~z)
+
+
+
+
+
+
 ```
 
