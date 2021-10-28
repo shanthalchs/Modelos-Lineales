@@ -1,0 +1,262 @@
+---
+title: "Tarea 6 - Modelos Lineales"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    df_print: paged 
+    highlight: kate
+    toc: TRUE
+    toc_float: TRUE
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+
+# Pregunta 1: [20 puntos] En este ejercicio vamos a usar la tabla de datos `SpotifyTop2018_40_V2.csv`, que contiene una lista de 40 de las canciones más reproducidas en Spotify en el año 2018. Los datos incluyen una serie de características importantes del audio de cada canción.
+
+
+```{r}
+datos <- read.table("../datos/SpotifyTop2018_40_V2.csv", sep = ",", dec = ".", header = T)
+
+str(datos)
+
+datos$time_signature <- as.factor(datos$time_signature)
+```
+
+
+## 1. Calcule el resumen numérico, interprete los resultados para dos variables
+
+```{r}
+summary(datos)
+```
+
+Para la variable `dduration_ms` se tiene que el máximo que dura una canción en miliseg es 268867  y el mínimo es 95467, además en promedio duran 205446.
+
+Para la variable `dtime_signature` hay máximo 4 beats por medida y minimo 3 beats, en promedio hay 4 beats por barra
+
+
+## 2. Realice un gráfico de dispersión e interprete dos similitudes en el gráfico.
+
+```{r}
+library(ggplot2)
+
+ggplot(datos, aes(x= energy, y = tempo))+
+  geom_point()
+```
+
+Hay dos 3 canciones que se parecen bastante entre el 0.7 y 0.8 eje x. Otras dos ubicadas cerca de  0.5 en el eje x.
+
+## 3. Para dos variables identifique los datos atípicos, si los hay.
+
+```{r}
+boxplot(datos)
+```
+En la variable `duration` hay 3 datos atipicos entre 5000 y 15000.
+
+## 4. Calcule la matriz de correlaciones, incluya alguna de las imágenes que ofrece `R` e interpréte dos de las correlaciones. Debe ser una interpretación dirigida a una persona que no sabe nada de estadística.
+
+```{r}
+library(corrplot)
+
+matriz.correlacion<-cor(datos[,-11])
+
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(matriz.correlacion, method="shade", shade.col=NA, tl.col="black", tl.srt=45,
+col=col(200), addCoef.col="black", order="AOE")
+```
+
+La correlación positiva más alta es la de loudness y energy esto quiere decir que entre más intesidad y actividad haya en una canción esto también la hara más apta para bailar. Por otro lado la correlación negativa más alta es la de duration_ms y danceability de 0.31 no es muy alta pero si significativa, esto nos indica que una canción entre más bailable menor es su duración en milisegundos.
+
+## 5. Efectúe un ACP y dé una interpretación siguiendo los siguientes pasos:
+
++ Elimine de los gráficos individuos y variables con menos del 5% de calidad de representación.
+
+
++ Explique la formación de los clústeres basado en la sobre-posición del círculo y el plano.
+
++ En el círculo de correlación determine la correlación entre las variables.
+
++ En el plano de los componentes 1 y 3 interprete las canciones In My Feelings, In My Mind, Havana, Candy Paint y HUMBLE, que son mal representadas en los componentes 1 y 2.
+
+```{r}
+library("FactoMineR") 
+library("factoextra")
+
+res<-PCA(datos[,-11], scale.unit=TRUE, ncp=5, graph = FALSE)
+cos2.ind<-(res$ind$cos2[,1]+res$ind$cos2[,2])*100
+
+
+plot(res, axes=c(1, 2), choix="ind",col.ind="red",new.plot=TRUE,select="cos2 0.05")
+```
+
+```{r}
+
+# Valores de los gráficos por defecto
+mi.tema <- theme_grey() + theme(panel.border = element_rect(fill = NA,color = "black"), plot.title = element_text(hjust = 0.5))
+
+fviz_pca_var(res,col.var="steelblue", select.var = list(cos2 = 0.05),ggtheme = mi.tema)
+
+```
+
+
+
+
+```{r}
+fviz_pca_var(res,col.var="steelblue", select.var = list(cos2 = 0.05),ggtheme = mi.tema)
+```
+
+# Pregunta 2: [20 puntos] En este ejercicio vamos a realizar un ACP para la tabla `SAheart.csv` la cual contiene variables numéricas y categóricas mezcladas. La descripción de los datos es la siguiente:
+
+Datos Tomados del libro: The Elements of Statistical Learning Data Mining, Inference, and Prediction de Trevor Hastie, Robert Tibshirani y Jerome Friedman de la Universidad de Stanford. .Example: South African Heart Disease: A retrospective sample of males in a heart-disease high-risk region of the Western Cape, South Africa. There are roughly two controls per case of coronary heart disease. Many of the coronary heart disease positive men have undergone blood pressure reduction treatment and other programs to reduce their risk factors after their coronary heart disease event. In some cases the measurements were made after these treatments.
+
+These data are taken from a larger dataset, described in Rousseauw et al, 1983, South African Medical Journal. Below is a description of the variables:
+
+Las dos variables categóricas se explican como sigue: `famhist` significa que hay historia familiar de infarto y que la variable `chd` significa que la persona murió de enfermedad cardíaca coronaria.
+
+Realice lo siguiente:
+
+```{r}
+
+datos <- read.table("../datos/SAheart.csv", sep = ";", dec = ".", header = T)
+
+str(datos)
+```
+
+
+# 1. Efectúe un ACP usando solo las variables numéricas y dé una interpretación siguiendo los siguientes pasos (para todos los ejercicios elimine de los gráficos individuos y variables con menos del 5 % de calidad de representación):
+
++ En el plano principal encuentre los clústeres.
+
++ En el círculo de correlación determine la correlación entre las variables.
+
++ Explique la formación de los clústeres basado en la sobre-posición del círculo y el plano.
+
+
+
+
+```{r}
+
+res<-PCA(datos[,-c(5,10)], scale.unit=TRUE, ncp=5, graph = FALSE)
+
+plot(res, axes=c(1, 2), choix="ind",col.ind="red",new.plot=TRUE,select="cos2 0.05")
+```
+```{r}
+
+plot(res, axes=c(1, 2), 
+     choix="var",col.var="blue",new.plot=TRUE,select="cos2 0.05")
+
+```
+
+
+# 2. Efectúe un ACP usando las variables numéricas y las variables categóricas (recuerde recodificar las categóricas usando código disyuntivo completo). Luego dé una interpretación siguiendo los siguientes pasos:
+
++ En el plano principal encuentre los clústeres.
+
++ En el círculo de correlación determine la correlación entre las variables.
+
++ Explique la formación de los clústeres basado en la sobre-posición del círculo y el plano.
+
++ Explique las diferencias de este ACP respecto al anterior (usando solo las variables numéricas. ¿Cuál le parece más interesante? ¿Por qué?
+
+
+
+```{r}
+
+famhist.Present <- as.numeric(datos$famhist == "Present")
+
+famhist.Absent <- as.numeric(datos$famhist == "Absent")
+
+chd.Si <- as.numeric(datos$chd == "Si")
+
+chd.No <- as.numeric(datos$chd == "No")
+
+datos2<-datos[,-c(5,10)]
+datos2<-cbind(datos2,famhist.Present)
+datos2<-cbind(datos2,famhist.Absent)
+datos2<-cbind(datos2,chd.Si)
+datos2<-cbind(datos2,chd.No)
+
+```
+
+```{r}
+
+res<-PCA(datos2, scale.unit=TRUE, ncp=5, graph = FALSE)
+plot(res, axes=c(1, 2), choix="ind", col.ind="red",new.plot=TRUE)
+```
+
+```{r}
+plot(res, axes=c(1, 2), choix="var", col.var="blue",new.plot=TRUE)
+
+```
+
+# Pregunta 3: [20 puntos] Suponga que somos contratados por el banco y se nos pide volver a predecir el monto promedio de deuda en tarjeta de crédito de una cartera de clientes relativamente nuevos, basado en otra cartera de comportamiento y estructura similar de la cual sí se tiene información de deuda en tarjeta de crédito. En este ejercicio hacemos uso de la tabla de datos `DeudaCredito.csv` que contiene información de los clientes en una de las principales carteras de crédito del banco, e incluye variables que describen cada cliente tanto dentro del banco como fuera de este.
+
+Cargue la tabla de datos en R, asegúrese que las variables se están leyendo de forma correcta.
+Recodifique variables en caso de que sea necesario, tome para entrenamiento un 80% de la tabla de datos. Realice lo siguiente:
+
+## 1. Ejecute un modelo de regresión con ACP incluyendo todas las variables predictoras y con la cantidad de componentes óptima ¿Cuántos componentes se usan? Por último interprete las medidas de error.
+
+```{r}
+
+```
+
+## 2. Ejecute un modelo de regresión con MCP incluyendo todas las variables predictoras y con la cantidad de componentes óptima ¿Cuántos componentes se usan? Por último explique cuál es la diferencia teórica de este modelo respecto al aplicado en el inciso anterior.
+
+```{r}
+
+```
+
+## 3. ¿Cuál de los métodos usa menor cantidad de componentes?¿Cuál de los métodos es más eficiente para explicar la varianza de la variablea predecir? ¿Cuál da mejor resultado en la predicción de la tabla de testing?
+
+```{r}
+
+```
+
+## 4. Seleccione una cantidad menor componentes en modelo con ACP del primer inciso con el objetivo de disminuir el overfitting y mejorar las predicciones. ¿Cuántos componetes usaría y por qué? (Sugerencia: Revise si aumenta mucho el RMSE y si disminuye mucho la varianza explicada cuando se disminuye la cantidad de componentes, y llegue a un equilibrio). Justifique.
+
+```{r}
+
+```
+
+## 5. ¿Los métodos usados anteriomente nos brindan un medio para selección de variables similar a Regresión Lasso? Justifique.
+
+```{r}
+
+```
+
+## 6. ¿De todos los modelos intentados en este ejercicio cuál dio mejores resultados en la tabla de testing? Interprete las medidas de error.
+
+```{r}
+
+```
+
+# Pregunta 4: [20 puntos] Un cliente nos contrata esta vez para aplicar un modelo no paramétrico con el fin de estudiar una posible oportunidad de negocio, y para ver si le es rentable quiere una predicción de las ventas potenciales de asientos de niños para autos en su tienda. Para ello nos proporciona la tabla de datos `AsientosNinno.csv` que contiene detalles de ventas de asientos de niños para auto en una serie de tiendas similares a las del cliente, y además los datos incluyen variables que definen características de la tienda y su localidad. La tabla de datos está formada por 400 filas y 13 columnas. Seguidamente se explican las variables que conforman la tabla.
+
+Cargue la tabla de datos en `R` y no elimine los `NA`. En caso de ser necesario, recodificar las variables de forma adecuada. Para medir el error tome un 20 % de la tabla de datos. Realice lo siguiente:
+
+## 1. Compare en esta tabla de datos todos los métodos de regresión estudiados hasta ahora en el curso ¿Cuál modelo prefiere? Justifique sus respuestas
+
+```{r}
+
+```
+
+# Pregunta 5: [20 puntos] Demuestre lo siguiente:
+
+

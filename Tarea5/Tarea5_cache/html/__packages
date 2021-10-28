@@ -1,0 +1,10 @@
+base
+knitr
+rmdformats
+traineR
+dplyr
+fastDummies
+ggplot2
+neuralnet
+plotly
+pracma

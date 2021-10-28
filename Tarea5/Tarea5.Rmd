@@ -304,7 +304,7 @@ g <- plot.real.prediccion(ttesting$Balance, prediccion.sigmoid$prediction , mode
 g + geom_smooth(method = lm, size = 0.4, color = "red", se = FALSE)
 ```
 
-
+Se oberva que para casi todos los núcleos excepto `Sigmoid` los valores reales se alinean bastante bien al modelo, el núcleo `linear` es el que mejor ajusta, aunque los valores iguales a cero reales variarion un poco.
 
 ## 3. Corra un modelo de redes neuronales usando 2 capas ocultas con 4 y 3 neuronas respectivamente. Ajuste los parámetros hasta que el modelo alcance convergencia (puede iniciar con umbral de detención como 0.05 y número de iteraciones de 50000).
 
@@ -700,7 +700,38 @@ $$
 L_D = \sum _{i=1}^{n} \lambda_i - \dfrac{1}{2}\sum_{i,j} \lambda_i \lambda_jy_iy_jx_i\cdot x_j - C\Big(\sum _{i=1}^{n}\xi_i \Big)^2.
 $$
 
+Construyendo el Lagrangiano y basandonos en la diapositiva 42  tenemos:
 
+$$
+L_p = \dfrac{||w||^2}{2} + C\Big(\sum _{i=1}^{n}\xi_i \Big)^2 - \sum_{i=1}^{n} \lambda_i(y_i(w_ix_i+b)-1+\epsilon_i) - \sum_{i=1}^{n} \mu_i\epsilon_i 
+$$
+Derivando:
+
+$\dfrac{\partial L_p}{\partial w_i} = w_j - \sum_{i=1}^{N} \lambda_i y_ix_{ij} = 0 \Rightarrow w_j = \sum_{i=1}^{N} \lambda_i y_ix_{ij}$
+
+$\dfrac{\partial L_p}{\partial b} = - \sum_{i=1}^{N} \lambda_iy_i = 0 \Rightarrow  \sum_{i=1}^{N} \lambda_iy_i = 0$ 
+
+$\dfrac{\partial L_p}{\partial \epsilon_i} = C - \lambda_i \mu_i =0 \Rightarrow \lambda_i + \mu_i = C$
+
+
+De esta forma en $L_p$:
+
+\begin{align*}
+  
+  L_p &= \dfrac{1}{2} \sum_{i,j=1}^{n} \lambda_i\lambda_jy_iy_jx_ix_j + C(\sum_{i=1}^{n}\xi_i)^2 \\
+  & -\sum_{i=1}^{n}\lambda_i (y_i(\sum_{j=1}^{n} \lambda_j\lambda_j y_j x_i x_j + b) - 1 + \epsilon_i) \\
+  & - \sum_{i=1}^{n}(2C\sum_{i=1}^{n}\epsilon_i - \lambda_i) \\ \epsilon_j \\
+  &= \dfrac{1}{2} \sum_{i=1}^{n} \lambda_i \lambda_j y_i y_j x_i x_j + C (\sum_{i=1}^{n}\epsilon_i)^2-\sum_{i,j = 1}^{n} \lambda_i \lambda_j y_i y_j x_i x_j \\
+  & - \sum_{i=1}^{n} \lambda_i y_i \sum_{j=1}^{n} b_j + \sum_{i=1}^{n} \lambda_i - \sum_{i=1}^{n} \lambda_i y_i \epsilon_i - 2C(\sum_{i=1}^{n}\epsilon_i)^2 + \sum_{i=1}^{n} \lambda_i y_i \epsilon_i \\
+  & = \sum_{i=1}^{n} \lambda_i - \dfrac{1}{2} \sum_{i=1}^{n} \lambda_i \lambda_j y_i y_j x_i x_j - C(\sum_{i=1}^{n}\xi_i)^2 - nb \sum_{i=1}^{n} \lambda_i y_i
+
+\end{align*}
+
+Y como $\sum_{i=1}^{n} \lambda_i y_i = 0$, tenemos:
+
+$$
+L_D = \sum_{i=1}^{n} \lambda_i - \dfrac{1}{2} \sum_{i,j =1}^{n} \lambda_i \lambda_j y_i y_j x_i x_j - C(\sum_{i=1}^{n} \xi_i)^2
+$$
 
 # Pregunta 6: __[10 puntos]__ Represente en un grafo dirigido la Red Neuronal que tiene la siguiente entrada:
 
@@ -733,28 +764,30 @@ $$
 \end{pmatrix}
 $$
 
+
 Además, use la siguiente función de activación en todas las neuronas:
 
 $$
 g(x) = \dfrac{1}{1+e^{-x}}
 $$
 
-$ y = g(W_1 \cdot\vec{x})$
 
-$=g\Bigg(\begin{pmatrix}
+\begin{align*}
+
+ y &= g(W_1 \cdot\vec{x})  = g \Bigg(\begin{pmatrix}
 2 & 3 & 0 & 1 \\
 4 & 3 & 2 & 0 \\
 1 & 1 & 1 & 2 \\
-\end{pmatrix}$
+\end{pmatrix}
 
-$\begin{pmatrix}
+ \begin{pmatrix}
 2 \\
 3 \\
 -1 \\
 2
-\end{pmatrix} \Bigg)$
+\end{pmatrix} \Bigg) 
 
-=  $ g \begin{pmatrix}
+= g \begin{pmatrix}
 15 \\
 15 \\
 8
@@ -762,41 +795,43 @@ $\begin{pmatrix}
 0.9999 \\
 0.9999 \\
 0.9996
-\end{pmatrix}$
+\end{pmatrix} \\
 
-$ z = g(W_2 \cdot\vec{y} + \vec{b})$
 
-$ = g \Bigg( \begin{pmatrix}
+z &= g(W_2 \cdot\vec{y} + \vec{b}) 
+
+ = g \Bigg( \begin{pmatrix}
 1 & 7 & 1 \\
 7 & 1 & 4  \\
-\end{pmatrix} $
-$\begin{pmatrix}
+\end{pmatrix} 
+
+ \begin{pmatrix}
 0.9999 \\
 0.9999 \\
 0.9996
-\end{pmatrix} $
-$ + \begin{pmatrix}
+\end{pmatrix}
+
++ \begin{pmatrix}
 -6 \\
 -2
-\end{pmatrix} \Bigg) $ 
-=  $ g \Bigg( \begin{pmatrix}
+\end{pmatrix} \Bigg)
+
+=  g \Bigg( \begin{pmatrix}
 \dfrac{22497}{2500} \\
 \dfrac{14997}{1250} 
-\end{pmatrix} $ 
-$ + \begin{pmatrix}
+\end{pmatrix} 
+
+ + \begin{pmatrix}
 -6 \\
 -2
-\end{pmatrix} \Bigg)$
+\end{pmatrix} \Bigg) \\
 
-$ g\begin{pmatrix}
+z &= \begin{pmatrix}
 2.9987 \\
 9.9976
-\end{pmatrix}$ =
-$\begin{pmatrix}
-0.9525 \\
-0.9999
-\end{pmatrix}$
+\end{pmatrix}
 
+\end{align*}
 
 <center>
 ![](grafoDirigido.png)
@@ -1060,11 +1095,12 @@ datos
 xdata = seq(-10,10,by=0.1)
 ydata = seq(-10,10,by= 0.1)
   
+data = meshgrid(xdata,ydata)
   
 X = data$X
 Y = data$Y
 
-data = meshgrid(xdata,ydata)
+
 
 Z =  X^2 +  Y^2 - 2*X - 6*Y + 14
 
@@ -1079,7 +1115,7 @@ plot_ly(x = X, y = Y, z = Z)%>%
 
 
 
-
+datos
 
 
 ```
@@ -1176,12 +1212,14 @@ datos
 
 xdata = seq(-10,10,by=0.1)
 ydata = seq(-10,10,by= 0.1)
-  
+
+
+data = meshgrid(xdata,ydata)  
   
 X = data$X
 Y = data$Y
 
-data = meshgrid(xdata,ydata)
+
 
 Z =  X^4 +  Y^4 - 4*X*Y + 1
 
