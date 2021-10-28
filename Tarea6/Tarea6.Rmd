@@ -119,8 +119,10 @@ fviz_pca_var(res,col.var="steelblue", select.var = list(cos2 = 0.05),ggtheme = m
 
 
 ```{r}
-fviz_pca_var(res,col.var="steelblue", select.var = list(cos2 = 0.05),ggtheme = mi.tema)
+fviz_pca_biplot(res,col.var = "#2E9FDF",col.ind = "#696969",select.ind = list(cos2 = 0.05),ggtheme = mi.tema)
 ```
+
+Para ubicarnos mejor usaremos los cuadrantes, el primero se ubican las canciones con mayor duración, tempo, música en vivo e instrumentalidad, el segundo cuadrante hay canciones con más loudnes y energy, el tercer cuadrante tiene las canciones con menos bulla y energía pero más presencia de palabras y acústica. El cuarto cuadrante y más bailables y con más positividad pero menos duración y tempo.
 
 # Pregunta 2: [20 puntos] En este ejercicio vamos a realizar un ACP para la tabla `SAheart.csv` la cual contiene variables numéricas y categóricas mezcladas. La descripción de los datos es la siguiente:
 
@@ -152,11 +154,16 @@ str(datos)
 
 
 ```{r}
+library("FactoMineR") 
+library("factoextra")
 
 res<-PCA(datos[,-c(5,10)], scale.unit=TRUE, ncp=5, graph = FALSE)
 
 plot(res, axes=c(1, 2), choix="ind",col.ind="red",new.plot=TRUE,select="cos2 0.05")
 ```
+
+Se observan 4 clusters (uno en cada cuadrante)
+
 ```{r}
 
 plot(res, axes=c(1, 2), 
@@ -164,6 +171,14 @@ plot(res, axes=c(1, 2),
 
 ```
 
+Las variables alcohol, tobacco, sbp, edad se correlacionan de forma positiva también de manera negativa con typea. Además las variables adiposity, ldl y obesidad se correlacionan de forma positiva entre ellas.
+
+```{r}
+fviz_pca_biplot(res,col.var = "#2E9FDF",col.ind = "#696969",select.ind = list(cos2 = 0.05),ggtheme = mi.tema)
+
+```
+
+El primer cluster presenta los individuos que tienen bajos indices de obesidad, ldl y adiposidad, el segundo cluster individuos con altos niveles de alcohol, tabaco, sbp y obesidad, el tercero es lo contrario, los individuos con bajos niveles de lo anterior pero presentan más personalidad typea y finalmente el cuarto cluster individuos con alta adiposidad, obesidad y ldl.
 
 # 2. Efectúe un ACP usando las variables numéricas y las variables categóricas (recuerde recodificar las categóricas usando código disyuntivo completo). Luego dé una interpretación siguiendo los siguientes pasos:
 
@@ -201,62 +216,269 @@ res<-PCA(datos2, scale.unit=TRUE, ncp=5, graph = FALSE)
 plot(res, axes=c(1, 2), choix="ind", col.ind="red",new.plot=TRUE)
 ```
 
+Aqui se aprecian de mejor forma tres clusteres.
+
 ```{r}
 plot(res, axes=c(1, 2), choix="var", col.var="blue",new.plot=TRUE)
 
 ```
+
+Aquí se observa que las variables famhist.Absent y chd.No se correlacion de forma positiva entre ellas y de forma negativa con typeA, chd.Si y famhist.Present. Ahora las variables tabaco, alcohol, edad y sbp , ldl y obesidad se correlacionan de forma positiva en este nuevo gráfico.
+
+```{r}
+fviz_pca_biplot(res,col.var = "#2E9FDF",col.ind = "#696969",select.ind = list(cos2 = 0.05),ggtheme = mi.tema)
+
+```
+
+En el primer cluster se observan se observan los individuos con diagnóstico negativo e historial familiar ausente, el segundo con presencia de vicios y edad avanzada y el tercer cluster que se correlaciona de forma positiva con las variable anteriores pero menos intenso es el que presenta diagnóstico positivo, personalidad typea e historial familiar presente.
 
 # Pregunta 3: [20 puntos] Suponga que somos contratados por el banco y se nos pide volver a predecir el monto promedio de deuda en tarjeta de crédito de una cartera de clientes relativamente nuevos, basado en otra cartera de comportamiento y estructura similar de la cual sí se tiene información de deuda en tarjeta de crédito. En este ejercicio hacemos uso de la tabla de datos `DeudaCredito.csv` que contiene información de los clientes en una de las principales carteras de crédito del banco, e incluye variables que describen cada cliente tanto dentro del banco como fuera de este.
 
 Cargue la tabla de datos en R, asegúrese que las variables se están leyendo de forma correcta.
 Recodifique variables en caso de que sea necesario, tome para entrenamiento un 80% de la tabla de datos. Realice lo siguiente:
 
+```{r}
+library(fastDummies)
+
+datos <- read.table("../datos/DeudaCredito.csv", dec = ".", sep = ",", header = T, row.names = 1)
+
+datos <- dummy_cols(datos, select_columns = c("Genero","Estudiante","Casado","Etnicidad"),remove_selected_columns = T)
+
+numero.predictoras <- dim(datos)[2] - 1
+filas <- dim(datos)[1] 
+muestra <- sample(1:filas, floor(filas*0.20))
+ttesting <- datos[muestra,]
+taprendizaje <- datos[-muestra,]
+```
+
+```{r}
+# Residual Sum of Square (RSS)
+RSS <- function(Pred,Real) {
+  ss <- sum((Real-Pred)^2)
+  return(ss)
+}
+
+# NumPred es el número total de predictores por eso se resta 1 (que es realidad sumar 1)
+RSE<-function(Pred,Real,NumPred) {
+  N<-length(Real)-NumPred-1  # <- length(Real)-(NumPred+1)
+  ss<-sqrt((1/N)*RSS(Pred,Real))
+  return(ss)
+}
+
+MSE <- function(Pred,Real) {
+  N<-length(Real)
+  ss<-(1/N)*RSS(Pred,Real)
+  return(ss)
+}
+
+error.relativo <- function(Pred,Real) {
+  ss<-sum(abs(Real-Pred))/sum(abs(Real))
+  return(ss)
+}
+
+# Funciones para desplegar precisión
+indices.precision <- function(real, prediccion,cantidad.variables.predictoras) {
+  return(list(error.cuadratico = MSE(prediccion,real),
+              raiz.error.cuadratico = RSE(prediccion,real,cantidad.variables.predictoras),
+              error.relativo = error.relativo(prediccion,real),
+              correlacion = as.numeric(cor(prediccion,real))))
+}
+
+
+# Gráfico de dispersión entre el valor real de la variable a predecir y la predicción del modelo.
+plot.real.prediccion <- function(real, prediccion, modelo = "") {
+  g <- ggplot(data = data.frame(Real = real, Prediccion = as.numeric(prediccion)), mapping = aes(x = Real, y = Prediccion)) +
+    geom_point(size = 1, col = "dodgerblue3") +
+    labs(title = paste0("Real vs Predicción", ifelse(modelo == "", "", paste(", con", modelo))),
+         x = "Real",
+         y = "Predicción")
+  return(g)
+}
+```
+
+
+
 ## 1. Ejecute un modelo de regresión con ACP incluyendo todas las variables predictoras y con la cantidad de componentes óptima ¿Cuántos componentes se usan? Por último interprete las medidas de error.
 
 ```{r}
+library(pls)
 
+modelo.pcr <- pcr(Balance~., data = taprendizaje, scale = TRUE, validation = "CV")
+
+# Selección automática y manual de la cantidad de componentes a usar según RMSE
+# Automática
+RMSE.CV <- RMSEP(modelo.pcr)$val[1, 1, ]
+componentes.usados <- which.min(RMSE.CV) - 1  # RMSE.CV considera 0 componentes principales, por eso se resta 1.
+componentes.usados
+
+# Predicción
+prediccion <- predict(modelo.pcr, ttesting, ncomp = componentes.usados)
+# Medición de precisión
+numero.predictoras <- dim(datos)[2]-1
+pre.pcr <- indices.precision(ttesting$Balance, prediccion,numero.predictoras)
+pre.pcr
 ```
+
+Se utilizan 11 componentes. Según las medidas de error la correlación del modelo es 96.91% bastante alto, el porcentaje de error fue de 18% y en promedio el error fue de 124.07.
 
 ## 2. Ejecute un modelo de regresión con MCP incluyendo todas las variables predictoras y con la cantidad de componentes óptima ¿Cuántos componentes se usan? Por último explique cuál es la diferencia teórica de este modelo respecto al aplicado en el inciso anterior.
 
 ```{r}
+modelo.plsr <- plsr(Balance~., data = taprendizaje, scale = TRUE, validation = "CV")
+#  Selección automática y manual de la cantidad de componentes a usar según RMSE
+# Automática
+RMSE.CV <- RMSEP(modelo.plsr)$val[1, 1, ]
+componentes.usados <- which.min(RMSE.CV) - 1  # RMSE.CV considera 0 componentes principales, por eso se resta 1.
+componentes.usados
+
+# Predicción
+prediccion <- predict(modelo.plsr, ttesting, ncomp = componentes.usados)
+# Medición de precisión
+numero.predictoras <- dim(datos)[2]-1
+pre.plsr <- indices.precision(ttesting$Balance, prediccion,numero.predictoras)
+pre.plsr
 
 ```
+
+Utiliza 13 componentes. Según las medidas de error la correlación del modelo es 96.87% más alto, el porcentaje de error fue de 18% y en promedio el error fue de 129.
+
+Método ACP: No supervisado, utilizan el supuesto de que los componentes que explican mayor varianza en los predictores, son los que explican mayor varianza en Y.
+
+Minimos Cuadrados Parciales: Supervisado, solucionan el problema con el supuesto ACP pues Es decir, los componentes ayudan a explicar la varianza de $X_1, ...,X_p$, y la de $Y$ a la vez.
 
 ## 3. ¿Cuál de los métodos usa menor cantidad de componentes?¿Cuál de los métodos es más eficiente para explicar la varianza de la variablea predecir? ¿Cuál da mejor resultado en la predicción de la tabla de testing?
 
-```{r}
-
-```
+En este caso ACP utiliza menos componentes, el método más eficiente y el que dio mejores resultados en testing fue MCP.
 
 ## 4. Seleccione una cantidad menor componentes en modelo con ACP del primer inciso con el objetivo de disminuir el overfitting y mejorar las predicciones. ¿Cuántos componetes usaría y por qué? (Sugerencia: Revise si aumenta mucho el RMSE y si disminuye mucho la varianza explicada cuando se disminuye la cantidad de componentes, y llegue a un equilibrio). Justifique.
 
 ```{r}
+modelo.pcr <- pcr(Balance~., data = taprendizaje, scale = TRUE, validation = "CV")
+
+# Selección automática y manual de la cantidad de componentes a usar según RMSE
+# Automática
+RMSE.CV <- RMSEP(modelo.pcr)$val[1, 1, ]
+
+RMSE.CV
+
+# Gráfico de varianza explicada en los predictores según componentes usados
+var.explicada <- cumsum(explvar(modelo.plsr)) / 100
+
+var.explicada
+
+componentes.usados <- 3  # RMSE.CV considera 0 componentes principales, por eso se resta 1.
+componentes.usados
+
+# Predicción
+prediccion <- predict(modelo.pcr, ttesting, ncomp = componentes.usados)
+# Medición de precisión
+numero.predictoras <- dim(datos)[2]-1
+pre.pcr <- indices.precision(ttesting$Balance, prediccion,numero.predictoras)
+pre.pcr
 
 ```
+
+Utilice 3 componentes ya que era el disminuía más la varianza y tenía un RMSE menor en comparación a los demás. Sin embargo no mejoraron las predicciones.
+
 
 ## 5. ¿Los métodos usados anteriomente nos brindan un medio para selección de variables similar a Regresión Lasso? Justifique.
 
-```{r}
+Es similar en el sentido de que hace selección de variables basado en cual minimiza el error, RSS en el caso de LASSO y RMSE en los de ACP. Sin embargo LASSO  penaliza variables (las anula) y en estos metodos se les quita peso a las dimensiones encontradas por el ACP.
 
-```
 
 ## 6. ¿De todos los modelos intentados en este ejercicio cuál dio mejores resultados en la tabla de testing? Interprete las medidas de error.
 
-```{r}
-
-```
+Aunque MCP dio mejores resultados, ACP solo dio peor en un 1% y este ultiza dos componentes menos, lo cual mejora su interpretabilidad.
+Se utilizan 11 componentes. Según las medidas de error la correlación del modelo es 97.96% bastante alto, el porcentaje de error fue de 16% y en promedio el error fue de 112.04.
 
 # Pregunta 4: [20 puntos] Un cliente nos contrata esta vez para aplicar un modelo no paramétrico con el fin de estudiar una posible oportunidad de negocio, y para ver si le es rentable quiere una predicción de las ventas potenciales de asientos de niños para autos en su tienda. Para ello nos proporciona la tabla de datos `AsientosNinno.csv` que contiene detalles de ventas de asientos de niños para auto en una serie de tiendas similares a las del cliente, y además los datos incluyen variables que definen características de la tienda y su localidad. La tabla de datos está formada por 400 filas y 13 columnas. Seguidamente se explican las variables que conforman la tabla.
 
 Cargue la tabla de datos en `R` y no elimine los `NA`. En caso de ser necesario, recodificar las variables de forma adecuada. Para medir el error tome un 20 % de la tabla de datos. Realice lo siguiente:
 
-## 1. Compare en esta tabla de datos todos los métodos de regresión estudiados hasta ahora en el curso ¿Cuál modelo prefiere? Justifique sus respuestas
 
 ```{r}
+datos <- read.table("../datos/AsientosNinno.csv", dec = ".", sep = ";",header = T, stringsAsFactors = T)[,-1]
+datos$CalidadEstant <- factor(datos$CalidadEstant,levels = c("Malo","Medio","Bueno"), ordered=TRUE)
+str(datos)
+
+datos <- dummy_cols(datos, select_columns = c("CalidadEstant"),remove_selected_columns = T)
+
+numero.predictoras <- dim(datos)[2] - 1
+filas <- dim(datos)[1] 
+muestra <- sample(1:filas, floor(filas*0.20))
+ttesting <- datos[muestra,]
+taprendizaje <- datos[-muestra,]
+
+
+#elimino las variables
+taprendizaje <- taprendizaje[,-c(4,13)]
+ttesting <- ttesting[,-c(4,13)]
 
 ```
 
+
+## 1. Compare en esta tabla de datos todos los métodos de regresión estudiados hasta ahora en el curso ¿Cuál modelo prefiere? Justifique sus respuestas
+
+```{r}
+library(pls)
+
+modelo.pcr <- pcr(Ventas~., data = taprendizaje, scale = TRUE, validation = "CV")
+
+# Selección automática y manual de la cantidad de componentes a usar según RMSE
+# Automática
+RMSE.CV <- RMSEP(modelo.pcr)$val[1, 1, ]
+componentes.usados <- which.min(RMSE.CV) - 1  # RMSE.CV considera 0 componentes principales, por eso se resta 1.
+componentes.usados
+
+# Predicción
+prediccion <- predict(modelo.pcr, ttesting, ncomp = componentes.usados)
+# Medición de precisión
+numero.predictoras <- dim(datos)[2]-1
+pre.pcr <- indices.precision(ttesting$Ventas, prediccion,numero.predictoras)
+pre.pcr
+```
+
+```{r}
+modelo.plsr <- plsr(Ventas~., data = ttesting, scale = TRUE, validation = "CV")
+#  Selección automática y manual de la cantidad de componentes a usar según RMSE
+# Automática
+RMSE.CV <- RMSEP(modelo.plsr)$val[1, 1, ]
+componentes.usados <- which.min(RMSE.CV) - 1  # RMSE.CV considera 0 componentes principales, por eso se resta 1.
+componentes.usados
+
+# Predicción
+prediccion <- predict(modelo.plsr, ttesting, ncomp = componentes.usados)
+# Medición de precisión
+numero.predictoras <- dim(datos)[2]-1
+pre.plsr <- indices.precision(ttesting$Ventas, prediccion,numero.predictoras)
+pre.plsr
+```
+
+
+## Errores
+
+```{r}
+library(dplyr)
+errores <- rbind(as.data.frame(pre.pcr),as.data.frame(pre.plsr))
+
+
+rownames(errores) <- c("Regresión ACP"," Regresión MCP")
+
+errores
+
+errores %>%
+filter(raiz.error.cuadratico == min(errores$raiz.error.cuadratico))
+
+```
+
+Tomando como referencia el error cuadrático medio, el mejor modelo fue SVM con núcleo linear de la Tarea 5.
+
+El promedio de los errores fue 0.87.
+
+La correlación fue de 97.83% la cual es bastante alta, incluso más alta que con el modelo de Regresión Múltiple de la tarea antes que fue de 97.12%.
+
+En promedio el modelo se equivocó en un 10%
+
 # Pregunta 5: [20 puntos] Demuestre lo siguiente:
 
-
+Soluciones en Pdf

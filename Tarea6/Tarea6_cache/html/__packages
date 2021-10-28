@@ -1,0 +1,10 @@
+base
+knitr
+rmdformats
+ggplot2
+corrplot
+FactoMineR
+factoextra
+fastDummies
+pls
+dplyr
