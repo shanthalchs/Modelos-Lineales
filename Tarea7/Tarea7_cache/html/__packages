@@ -1,0 +1,9 @@
+base
+knitr
+rmdformats
+lubridate
+dplyr
+zoo
+xts
+forecast
+dygraphs

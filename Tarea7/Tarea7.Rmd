@@ -1,0 +1,374 @@
+---
+title: "Tarea 7 - Modelos Lineales"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    df_print: paged 
+    highlight: kate
+    toc: TRUE
+    toc_float: TRUE
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+
+Sys.setlocale(locale = "es_ES.UTF-8")
+```
+
+#1. __[5 puntos]__ ¿Explique por qué los datos de la tabla incluida en el archivo `OilPrice.csv` no son una serie de tiempo?
+
+La tabla `Oilprice.csv` no es una serie de tiempo dado que no tienen en cuenta dos días a la semana, por lo que no es equiespaciada.
+
+# 2. __[5 puntos]__ Cargue el archivo `fechas.csv`, el cual contiene una única columna con un registro de fechas. Convierta dicha columna a tipo POSIXct y luego muestre el resultado.
+
+```{r}
+datos <- read.table("../datos/fechas.csv", header = T)
+
+datos$fecha <- as.POSIXct(datos$fecha, format = "Hora de Registro: %H:%M. Del día %A %d de %B del año %Y")
+
+datos
+```
+
+# 3. __[6 puntos]__ Calcule la diferencia en días, semanas, meses, trimestres, semestres y años entre las fechas 5/7/1978 y 20/07/2021.
+
+```{r}
+library(lubridate)
+
+fecha.inicio <- dmy("05071978")
+fecha.final <- dmy(20072021)
+
+intervalo <- interval(fecha.inicio, fecha.final)
+
+# semanas
+print(paste(intervalo/weeks(1),"semanas")) 
+# meses
+print(paste(intervalo/months(1),"meses")) 
+# trimestres
+print(paste(intervalo/months(3),"trimestres"))
+# semestres
+print(paste(intervalo/months(6),"semestre")) 
+# años
+print(paste(intervalo/years(1),"años")) 
+```
+
+# 4. __[12 puntos]__ El archivo `covid_19.csv` contiene la cantidad de casos nuevos diarios registrados en Costa Rica desde el 6 de marzo del 2020 hasta el 23 de abril de 2021. Usando solamente los datos desde el 01 de junio del 2020 hasta el 31 de marzo del 2021 (con Patrón-Estacional anual), obtenga una serie de tiempo (objeto ts) y grafique usando plot, autoplot y dygraph.
+
+```{r, fig.width=6, fig.height=3}
+library(dplyr)
+library(xts)
+
+datos <- read.table("../datos/covid19_CR.csv", sep = ";", dec= ".", header = T)
+
+str(datos)
+
+
+#la hago tipo fecha
+datos$FECHA <- ymd(datos$FECHA)
+
+#filtro los datos de las fechas solicitadas solicitadas
+
+  
+datos_filtrados <- datos%>% filter(FECHA >= "2020-06-01" & FECHA <= "2021-03-31")
+
+yday(ymd("2020-06-01"))
+  
+serie <- ts(datos_filtrados[,2], frequency = 365, start = c(2020,yday(ymd("2020-06-01"))))
+
+#gráfico
+
+fecha <- as.Date("2020-06-01") + days(0:303)
+aux <- xts(serie, order.by = fecha)
+
+
+```
+
+```{r, fig.width=6, fig.height=3}
+library(forecast)
+library(dygraphs)
+
+plot(serie)
+```
+
+### autoplot
+
+```{r, fig.width=6, fig.height=3}
+
+autoplot(serie, xlab = "Año", ylab = "CO2 (mol)", main = "Serie de Tiempo")
+
+```
+
+### dygraph
+
+```{r}
+dygraph(aux, main = "Casos diarios de COVID", xlab = "Año", ylab = "valor", width = "100%") %>% 
+  dyRangeSelector(height = 20, strokeColor = "black", fillColor = "black")
+```
+
+# 5. __[16 puntos]__ Para este ejercicio se deben usar los datos `trafico_tren.csv`. Esta tabla cuenta con la cantidad de personas que se suben a un metro por hora. Con la tabla realice lo siguiente:
+
+```{r}
+datos <- read.table("../datos/trafico_tren.csv", header = T, sep = ",", dec = ".")
+```
+
+## (a) Realice un filtro para obtener los datos que se encuentran a partir del día 25 de junio del año 2016. Despliegue en el documento un `head(...)` de los resultados.
+
+```{r}
+library(dplyr)
+#paso a formato de fechas
+datos$date_time <- as.POSIXct(datos$date_time, format = "%Y-%m-%d %H:%M:%S")
+
+
+datos <- datos%>%
+  filter(date_time>=dmy(25062016))
+
+head(datos)
+```
+
+## (b) Verifique si existen fechas faltantes. De ser así, impute dichas fechas y asígnele el promedio.
+
+```{r}
+fecha.inicio <- datos$date_time[1]
+fecha.final <- datos$date_time[nrow(datos)]
+
+total.fechas <- seq(fecha.inicio, fecha.final, by = "hour")
+
+faltan.fechas <- total.fechas[!total.fechas %in% datos$date_time]
+faltan.fechas
+
+datos <- union_all(datos, data.frame(date_time = faltan.fechas))
+
+datos <- datos[order(datos$date_time), ]
+
+
+## Asignamos la media
+
+datos$traffic_volume[is.na(datos$traffic_volume)] <- mean(datos$traffic_volume, na.rm = T)
+
+datos1 <- datos%>%
+  group_by(date_time)%>%
+  summarise(traffic_volume = mean(traffic_volume))
+
+```
+
+## (c) Convierta los datos a una serie de tiempo `ts`. Utilice una frecuencia de forma que el Patrón-Estacional sea diario (Observe que la tabla de datos viene por hora).
+
+```{r}
+vector.fechas <- seq(fecha.inicio, fecha.final, by = "hour")
+
+serie <- ts(datos1$traffic_volume, frequency = 24, start = 1)
+
+
+aux <- xts(serie, order.by = vector.fechas)
+
+aux
+
+
+
+```
+
+## (d) Muestre la serie de tiempo con un gráfico utilizando plot y autplot.
+
+```{r, fig.width=6, fig.height=3}
+
+plot(serie)
+
+autoplot(serie)
+
+
+dygraph(aux, main = "Serie de Tiempo", xlab = "Año", ylab = "valor", width = "100%") %>%
+  dyOptions(fillGraph = TRUE, fillAlpha = 0.4) %>% 
+  dyRangeSelector(height = 20, strokeColor = "black", fillColor = "black")
+```
+
+# 6. __[12 puntos]__ Utilizando nuevamente los datos `trafico_tren.csv` (con el filtro aplicado en el punto anterior) y los paquetes `dplyr` y `lubridate`, realice lo siguiente:
+
+## (a) Transforme la serie de datos por hora en una serie de datos promediados por día y convierta a serie de tiempo con Patrón-Estacional semanal. Despliegue en el documento un `head(...)` de los resultados.
+
+```{r}
+#promedio por día
+datosDia <- datos1%>%
+  group_by(date_time = round_date(date_time,"day"))%>%
+  summarise(traffic_volume = mean(traffic_volume))
+
+vector.fechas <- seq(fecha.inicio, fecha.final, by = "hour")
+
+#Padron Estacional Semanal y los datos son diarios entonces 7 días por semana
+serie <- ts(datosDia$traffic_volume, frequency = 7, start = c(1,wday(fecha.inicio)))
+
+head(serie)
+```
+
+## (b) Transforme la serie de datos por hora en una serie de datos promediados por mes y convierta a serie de tiempo con Patrón-Estacional anual. Despliegue en el documento un
+`head(...)` de los resultados.
+
+```{r}
+datosMes <- datos1%>%
+  group_by(date_time = round_date(date_time,"month"))%>%
+  summarise(traffic_volume = mean(traffic_volume))
+
+#Datos mensuales y Padron estacional anual 
+serie <- ts(datosMes$traffic_volume, frequency = 12, start = c(2016, 7) )
+
+head(serie)
+```
+
+
+## (c) Transforme la serie de datos por hora en una serie de datos sumados por mes y convierta a serie de tiempo con Patrón-Estacional anual. Despliegue en el documento un `head(...)` de los resultados.
+
+```{r}
+datosMes <- datos1%>%
+  group_by(date_time = round_date(date_time,"month"))%>%
+  summarise(traffic_volume = sum(traffic_volume))
+
+#Datos mensuales y Padron estacional anual 
+serie <- ts(datosMes$traffic_volume, frequency = 12, start = c(2016, 7) )
+
+head(serie)
+```
+
+# 7. __[16 puntos]__ La tabla `USA_CR.csv` contiene los movimientos de compra y venta del colón con respecto al dólar desde el 15 de Enero del 2016 al 20 de Septiembre del 2019. Con la tabla realice lo siguiente:
+
+```{r}
+datos <- read.table("../datos/USA_CR.csv", header = T, sep = ";", dec = ",")
+
+str(datos)
+
+#pasamos a formato fecha
+datos$FECHA <- as.POSIXct(datos$FECHA, format = "%d %b %Y")
+
+```
+
+## (a) Encuentre las fechas faltantes si es que las hay, incluya fines de semana, e impute dichas fechas y para cada variable asígnele su promedio.
+
+```{r}
+fecha.inicio <- datos$FECHA[1]
+fecha.final <- datos$FECHA[nrow(datos)]
+
+total.fechas <- seq(fecha.inicio, fecha.final, by = "day")
+
+faltan.fechas <- total.fechas[!total.fechas %in% datos$FECHA]
+faltan.fechas
+
+datos <- union_all(datos, data.frame(FECHA = faltan.fechas))
+
+datos <- datos[order(datos$FECHA), ]
+
+
+## Asignamos la media
+
+datos$TIPO_CAMBIO_COMPRA[is.na(datos$TIPO_CAMBIO_COMPRA)] <- mean(datos$TIPO_CAMBIO_COMPRA, na.rm = T)
+
+datos$TIPO_CAMBIO_VENTA[is.na(datos$TIPO_CAMBIO_VENTA)] <- mean(datos$TIPO_CAMBIO_VENTA, na.rm = T)
+```
+
+## (b) Elimine los días bisiestos (29 de febrero) en caso de haber alguno.
+
+```{r}
+datos <- datos[!(month(datos$FECHA) == 2 & day(datos$FECHA) == 29),]
+```
+
+## (c) Convierta los datos a una serie de tiempo `ts` utilizado la variable `TIPO_CAMBIO_COMPRA.csv`. Utilice una frecuencia de forma que el Patrón-Estacional sea anual.
+
+```{r}
+serie <- ts(datos$TIPO_CAMBIO_COMPRA, frequency = 365, start = c(2016,yday(fecha.inicio)))
+
+serie
+```
+
+## (d) Muestre la serie de tiempo con un gráfico utilizando `dygraph`.
+
+```{r}
+fechas <- seq(fecha.inicio, fecha.final, by = "days")
+
+aux <- xts(serie, order.by = datos$FECHA)
+
+dygraph(aux, main = "Serie de Tiempo", xlab = "Año", ylab = "valor", width = "100%") %>%
+    dyOptions(fillGraph = TRUE, fillAlpha = 0.4) %>%
+    dyRangeSelector(height = 20, strokeColor = "black", fillColor = "black")
+
+```
+
+# 8. __[16 puntos]__ Repita el ejercicio anterior, pero esta vez elimine los fines de semana (Sábado y Domingo). Es decir, se deben mantener solo los días laborales. Observe que sin fines de semana la frecuencia no es la misma.
+
+```{r}
+#elimino los fines de semana
+datos <- datos[!wday(datos$FECHA) %in% c(1, 7),]
+
+serie <- ts(datos$TIPO_CAMBIO_COMPRA, frequency = 260, start = c(2016,yday(fecha.inicio)))
+
+aux <- xts(serie, order.by = datos$FECHA)
+
+dygraph(aux, main = "Serie de Tiempo", xlab = "Año", ylab = "valor", width = "100%") %>%
+    dyOptions(fillGraph = TRUE, fillAlpha = 0.4) %>%
+    dyRangeSelector(height = 20, strokeColor = "black", fillColor = "black")
+
+```
+
+# 9. __[12 puntos]__ El siguiente código genera datos al azar, con dichos datos realice lo que se solicita a continuación:
+
+```{r}
+monto <- sample(10000:20000, 1672, replace = T)
+```
+
+## (a) Suponiendo que los datos son diarios y tienen un Patrón-Estacional anual defina una serie de tiempo cuyo primer dato es el 21 de abril del año 2000.
+
+```{r}
+serie <- ts(monto, frequency = 365, start = c(2000,yday(ymd(20000421))))
+
+head(serie)
+```
+
+## (b) Suponiendo que los datos son por hora y tienen un Patrón-Estacional anual defina una serie de tiempo cuyo primer dato es el 11 de marzo del año 2000 a las 11pm (23 horas).
+
+```{r}
+
+vector.fechas <- seq(as.POSIXct("2000-01-01 00:00:00"), as.POSIXct("2000-03-11 23:00:00"), by = "hour")
+length(vector.fechas)
+serie <- ts(monto, frequency = 8760 , start = c(2000, 1704))
+
+head(serie)
+
+```
+
+## (c) Suponiendo que los datos son por minuto y tienen un Patrón-Estacional anual defina una serie de tiempo cuyo primer dato es el 2 de enero del año 2000 a las 11:22pm.
+
+```{r}
+serie <- ts(monto, frequency = 525600, start = c(2000, 2843))
+
+#minutos hasta 2 de enero - 22 minutos que ya pasaron 
+(yday(ymd(20000102))*1440) - 38
+
+
+
+vector.fechas <- seq(as.POSIXct("2000-01-01 00:00:00"), as.POSIXct("2000-01-02 23:22:00"), by = "min")
+length(vector.fechas)
+
+
+head(serie)
+```
+
+## d) Suponiendo que los datos son por minuto y tienen un Patrón-Estacional anual defina una serie de tiempo cuyo primer dato es el 4 de enero del año 2000 a las 11:30pm.
+
+```{r}
+vector.fechas <- seq(as.POSIXct("2000-01-01 00:00:00"), as.POSIXct("2000-01-04 23:30:00"), by = "min")
+
+length(vector.fechas)
+
+serie <- ts(monto, frequency = 525600, start = c(2000,length(vector.fechas)))
+
+head(serie)
+```
