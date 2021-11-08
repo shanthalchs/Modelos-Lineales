@@ -628,3 +628,46 @@ dygraph(predicciones, width = "100%") %>%
   dyRangeSelector()
 ```
 
+# 4. __[25 puntos]__ Realice lo siguiente:
+
+## a) 
+
+Usando las fórmulas vistas en la presentación, tenemos que:
+
+$$
+A = 3*cos(0.4) = 2.763183 \\
+B= -3*sen(0.4) = -1.168255
+$$
+## b)
+
+Usando las fórmulas vistas en la presentación, tenemos que:
+
+$$
+R = \sqrt(1^2 + 3^2) = 3.16 \\
+\Phi = arctan(-3/1) = -1.24
+$$
+
+## c)
+
+```{r}
+library(TSA)
+
+t=1:96
+cos1=cos(2*pi*t*4/96)
+cos2=cos(2*pi*(t*14/96+.3))
+y=2*cos1+3*cos2
+plot(t,y,type='o',ylab=expression(y[t]))
+periodogram(y)
+abline(h=0)
+axis(1,at=c(0.04167,.14583))
+```
+
++ Use la ecuación (3) de la presentación vista en clase sobre el peridiograma para calcular $A_{14}$ y $B_{14}$ con una frecuencia $f = 14/96$, note que para este componente la amplitud es 1; la fase es $0,6\pi$
+
+
+$$
+
+A_{14} = 1*cos(0.6\pi) = -0.309017 \\
+B_{14} = -1*sen(0.6\pi) = -0.95105 \\
+
+$$
