@@ -1,0 +1,630 @@
+---
+title: "Tarea 8 - Modelos Lineales"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    df_print: paged 
+    highlight: kate
+    toc: TRUE
+    toc_float: TRUE
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+
+Sys.setlocale(locale = "es_ES.UTF-8")
+```
+
+
+# 1. __[30 puntos]__ El archivo `CO2.csv` contiene las concentraciones mensuales de CO2 de Mauna Loa en particulas de CO2 por millón (ppm), se tienen datos en el archivo desde enero de 1958 hasta diciembre del 2017. Usando solamente los datos desde enero de 1965 hasta octubre de 2017, realize lo siguiente:
+
+```{r}
+
+library(xts)
+library(dplyr)
+library(ggplot2)
+library(forecast)
+library(dygraphs)
+library(lubridate)
+
+datos <- read.table("../datos/CO2.csv", sep = "," , dec = ".", header = T)
+
+str(datos)
+```
+
+## a) Verifique la normalidad de la serie de tiempo (las diferencias). Debe de probar la normalidad utilizando las 3 formas vistas en clase.
+
+### Comparación de gráficos de los residuos
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(xts)
+
+# creo la variable Fecha con año y mes
+datos <- datos%>% mutate(Fecha = paste0(Yr," ", Mn, " ", 01))
+datos$Fecha <- as.Date(datos$Fecha, format = "%Y %m %d")
+
+#elimino las variables que ya no necesito 
+datos <- datos[,c(11,5)]
+
+# filtro los rangos
+
+datos <- datos%>% filter(Fecha >= dmy(01011965) & Fecha <= dmy(01102017))
+
+#serie.datos 
+serie.CO2 <- ts(datos$CO2,frequency = 12, start = c(1965,1))
+
+
+h <- hist(diff(serie.CO2), plot = F)
+x <- seq(min(h$mids, na.rm = T), max(h$mids, na.rm = T), length = length(serie.CO2))
+promedio   <- mean(diff(serie.CO2), na.rm = T)
+desviacion <- sd(diff(serie.CO2), na.rm = T)
+normalidad <- dnorm(x, promedio, desviacion)
+
+ggplot() + geom_histogram(aes(x = diff(serie.CO2), y = ..density..), bins = 30, color = "white") + 
+  geom_density(aes(x = diff(serie.CO2), y = ..density.., color = "Densidad"), size = 2) +
+  geom_line(aes(x = x, y = normalidad, color = "Normalidad"), size = 2)
+```
+
+### qqnorm y qqline
+
+```{r}
+qqnorm(diff(serie.CO2))
+qqline(diff(serie.CO2), col = "red")
+```
+
+### Test Normalidad
+
++ Test chi-square de Pearson
+
+```{r}
+library(nortest)
+pearson.test(diff(serie.CO2))
+```
+
++ Test Lilliefors (Kolmogorov-Smirnov)
+
+```{r}
+lillie.test(serie.CO2)
+```
+
++ Test de Cramer-von Mises
+
+```{r}
+cvm.test(serie.CO2)
+```
+
+## b) Convierta a serie de tiempo (utilice patrón-estacional anual) y realice una descomposición de la serie de tiempo.
+
+```{r}
+serie.CO2 <- ts(datos$CO2,frequency = 12, start = c(1965,1))
+```
+
+## c) Determine y grafique los periodos más importantes.
+
+```{r}
+# Calculamos el espectro y la frecuencia con la función spec.pgram.
+res <- spec.pgram(serie.CO2, log = "no", plot = F)
+
+# Ordenamos el espectro con respecto a la frecuencia en orden decreciente
+max <- order(res$spec, res$freq, decreasing = TRUE)
+
+# Tomamos las primeras 3 posiciones. El valor 1 no se toma en cuenta pues es toda la serie.
+max <- max[max != 1][1:3] 
+
+# Tomamos de las frecuencias las posiciones obtenidas.
+
+max <- res$freq[max]
+
+# Finalmente obtenemos los periodos más importantes, se usa 12 en el numerador porque la frecuencia es 12.
+
+periodos <- 12/max
+periodos
+```
+
+```{r}
+dygraph(res, 'Peridiograma', 'Frecuencia', 'Espectro', width = "100%") %>%
+  dyEvent(max[1], color = "green") %>%
+  dyEvent(max[2], color = "red") %>%
+  dyEvent(max[3], color = "navy") %>%
+  dyRangeSelector() %>% dyOptions(drawPoints = TRUE, pointSize = 2)
+```
+
+## d) Usando el año 2017 para pruebas y el resto de fechas para entrenamiento genere modelos utilizando los métodos del `Promedio`, `Ingenuo`, `Estacional Ingenuo`, `Desvío` y el de `Descomposición`, luego grafique en un solo gráfico la serie de entrenamiento, la serie de prueba y el resultado de la predicción de cada uno de los modelos anteriores.
+
+```{r}
+serie.test <-tail(serie.CO2,10)
+
+serie.train <- head(serie.CO2,624)
+
+```
+
+### Promedio
+
+```{r}
+metodo.promedio <- meanf(serie.train, h = 10)
+pred.promedio <- forecast(metodo.promedio, h = 10)
+
+
+predicciones <- ts.union(
+  serie.train, Original = serie.test, Promedio = pred.promedio$mean
+)
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+```
+
+### Ingenuo
+
+```{r}
+metodo.naive <- naive(serie.train, h = 10)
+pred.naive <- forecast(metodo.naive, h = 10)
+
+predicciones <- ts.union(
+  serie.train, Original = serie.test, `Naïve` = pred.naive$mean
+)
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+
+```
+
+### Estacional Naive
+
+```{r}
+metodo.snaive <- snaive(serie.train, h = 10)
+pred.snaive <- forecast(metodo.snaive, h = 10)
+
+predicciones <- ts.union(
+  serie.train, Original = serie.test,`S.Naïve` = pred.snaive$mean
+)
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+```
+
+### Desvio
+
+```{r}
+metodo.drift <- rwf(serie.train, h = 10, drift = T)
+pred.drift <- forecast(metodo.drift, h = 10)
+
+predicciones <- ts.union(
+  serie.train, Original = serie.test,`Desvío` = pred.drift$mean
+)
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+
+```
+
+### Descomposición
+
+```{r}
+metodo.stl <- stl(serie.train, s.window = "periodic")
+pred.stl <- forecast(metodo.stl, h = 10)
+
+predicciones <- ts.union(
+  serie.train, Original = serie.test, `Descomposición` = pred.stl$mean
+)
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+```
+
+```{r}
+predicciones <- ts.union(
+  serie.train, Original = serie.test, Promedio = pred.promedio$mean,
+  `Naïve` = pred.naive$mean, `S.Naïve` = pred.snaive$mean,
+  `Desvío` = pred.drift$mean, `Descomposición` = pred.stl$mean
+)
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+```
+
+## e) Con un gráfico mida el error y determine cuál modelo es el mejor.
+
+```{r}
+RSS <- function(Pred, Real) {
+  return(sum((Real - Pred)^2))
+}
+MSE <- function(Pred, Real) {
+  N <- length(Real)
+  rss <- sum((Real - Pred)^2)
+  return((1/N) * rss)
+}
+RMSE <- function(Pred, Real) {
+  N <- length(Real)
+  rss <- sum((Real - Pred)^2)
+  return(sqrt((1/N) * rss))
+}
+RE <- function(Pred, Real) {
+    res <- sum(abs(Real - Pred))/sum(abs(Real))
+    return(res)
+}
+
+tabla.errores <- function(predicciones, real, nombres = NULL) {
+    r <- data.frame()
+    for (pred in predicciones) {
+        r <- rbind(r, data.frame(MSE = MSE(pred, real), RMSE = RMSE(pred, real),
+            RE = RE(pred, real), CORR = cor(pred, real)))
+    }
+    row.names(r) <- nombres
+    return(r)
+}
+
+grafico.errores <- function(errores) {
+    library(ggplot2)
+    library(reshape)
+
+    centros <- as.data.frame(apply(errores, 2, function(i) scales::rescale(i, to = c(0,
+        100))))
+
+    res <- melt(t(centros), varnames = c("E", "Modelos"))
+    res <- res[order(res$E, decreasing = F), ]
+    res$M <- as.character(res$M)
+    y = c(0, 25, 50, 75, 100)
+
+    ggplot(res, aes(x = E, y = value, group = Modelos, color = Modelos, fill = Modelos)) +
+        geom_polygon(alpha = 0.3, size = 1) + geom_point(size = 3) + theme_minimal() +
+        theme(axis.text.y = element_blank()) + xlab("") + ylab("") + scale_y_continuous(limits = c(-10,
+        100), breaks = y) + annotate("text", x = 0.5, y = y, label = paste0(y, "%"),
+        color = "gray60") + ggproto("CordRadar", CoordPolar, theta = "x", r = "y",
+        start = 0, direction = sign(1))
+}
+errores <- tabla.errores(
+  predicciones = list(pred.promedio$mean, pred.naive$mean, pred.snaive$mean, pred.drift$mean, pred.stl$mean), 
+  real = serie.test,
+  nombres = c("Promedio", "Naive", "S Naive", "Desvio", "STL/Descomposición")
+)
+
+errores
+
+grafico.errores(errores)
+
+
+
+```
+
+El mejor modelo es `STL Descomposición`. 
+
+## f) Con el mejor modelo encontrado en el punto anterior genere la predicción de un año, pero esta vez utilizando toda la serie de tiempo. Grafique la serie original y la predicción.
+
+```{r}
+modelo.final <- stl(serie.CO2, s.window = "periodic")
+
+pred <- forecast(modelo.final, h = 12)
+
+predicciones <- ts.union(
+  serie.CO2,
+  `Predicción` = pred$mean,
+  LimInf = pred$lower[, 2],
+  LimSup = pred$upper[, 2]
+)
+
+dygraph(predicciones, width = "100%") %>% 
+  dySeries(c("LimInf", "Predicción", "LimSup"), label = "Producción") %>%
+  dyRangeSelector()
+```
+
+# 2. __[25 puntos]__ El archivo `covid19_CR.csv` contiene la cantidad de casos nuevos diarios registrados en Costa Rica desde el 6 de marzo del 2020 hasta el 23 de abril de 2021. Con la tabla realice lo siguiente:
+
+```{r}
+datos <- read.table("../datos/covid19_CR.csv", sep = ";", dec= ".", header = T)
+str(datos)
+
+datos$FECHA <- as.Date(datos$FECHA, format = "%Y-%m-%d")
+
+#filtro el rando de datos deseados 
+datos <- datos%>% filter(FECHA >= dmy(06032020) & FECHA <= dmy(23042021))
+```
+
+## a) Verifique si hay fechas faltantes y de ser así realice la corrección mediante un suavizado (Utilice el valor que usted considere).
+
+```{r}
+fecha.inicio <- dmy(06032020)
+fecha.final <- dmy(23042021)
+
+total.fechas <- seq(fecha.inicio, fecha.final, by = "day")
+faltan.fechas <- total.fechas[!total.fechas %in% datos$FECHA]
+
+faltan.fechas
+```
+
+No faltan fechas.
+
+## b) Realice un suavizado utilizando 5 datos (2 atrás y 2 adelante) y 11 datos (5 atrás y 5 adelante). Guarde ambos resultados en variables.
+
+```{r}
+suavizado <- function(datos, n) {
+  library(zoo)
+  if(n %% 2 == 0) {
+    izquierda = rep(NA, (floor(n/2) - 1))
+    derecha   = rep(NA, floor(n/2))
+  } else {
+    izquierda = derecha = rep(NA, floor(n/2))
+  }
+  
+  datos <- c(izquierda, datos, derecha)
+  return(rollapply(datos, n, mean, na.rm = T))
+}
+
+datos.suavizados.covid5 <- suavizado(datos$casos_nuevos,5)
+datos.suavizados.covid11 <- suavizado(datos$casos_nuevos,11)
+```
+
+## c) Convierta a serie de tiempo (utilice patrón-estacional semanal) los 3 sets de datos obtenidos en los puntos anteriores. Es decir, debe de generar 3 series de tiempo, una con un suavizado de 5, otra con un suavizado de 11 y la serie original.
+
+```{r}
+serie <- ts(datos$casos_nuevos, frequency = 7, start = c(1, wday(fecha.inicio)))
+serie.suavizada.covid5 <- ts(datos.suavizados.covid5, frequency = 7, start = c(1, wday(fecha.inicio)))
+serie.suavizada.covid11 <- ts(datos.suavizados.covid11, frequency = 7, start = c(1, wday(fecha.inicio)))
+
+
+```
+
+## d) Utilizando el último mes de abril para pruebas y el resto de fechas para entrenamiento genere el modelo de `Estacional Ingenuo` para cada una de las series obtenidas, luego grafique en un solo gráfico la serie de entrenamiento, la serie de prueba (valor real) y el resultado de la predicción de cada uno de los modelos.
+
+### Serie original
+
+```{r}
+library(xts)
+
+serie.test.original <-  tail(serie,23)
+serie.train.original <- head(serie, 414-23)
+
+
+metodo.snaive.original <- snaive(serie.train.original, h = 23)
+
+pred.snaive.original <- forecast(metodo.snaive.original, h = 23)
+
+fecha <- fecha.inicio + days(0:413)
+
+
+# gráfico
+predicciones <- ts.union(
+  serie.train.original, Original = serie.test.original,`S.Naïve` = pred.snaive.original$mean
+)
+
+predicciones <- xts(xts(predicciones, order.by = fecha))
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+```
+
+### Serie con 5 datos
+
+```{r}
+serie.test5 <-  tail(serie.suavizada.covid5,23)
+serie.train5 <- head(serie.suavizada.covid5, 414-23)
+
+metodo.snaive5 <- snaive(serie.train5, h = 23)
+
+pred.snaive5 <- forecast(metodo.snaive5, h = 23)
+
+fecha <- fecha.inicio + days(0:413)
+
+# gráfico
+predicciones <- ts.union(
+  serie.train5, Original = serie.test5,`S.Naïve` = pred.snaive5$mean
+)
+
+length(serie.train5) 
+length(serie.test5)
+length(pred.snaive5$mean)
+
+predicciones <- xts(xts(predicciones, order.by = fecha))
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+```
+
+### Serie con 11 datos
+
+```{r}
+serie.test11 <-  tail(serie.suavizada.covid11,23)
+serie.train11 <- head(serie.suavizada.covid11, 414-23)
+
+metodo.snaive11 <- snaive(serie.train11, h = 23)
+
+pred.snaive11 <- forecast(metodo.snaive11, h = 23)
+
+fecha <- fecha.inicio + days(0:413)
+
+
+# gráfico
+predicciones <- ts.union(
+  serie.train11, Original = serie.test11,`S.Naïve` = pred.snaive11$mean
+)
+
+predicciones <- xts(xts(predicciones, order.by = fecha))
+dygraph(predicciones, width = "100%") %>%
+  dyRangeSelector()
+```
+
+## e) Con un gráfico mida el error y determine cuál modelo es el mejor.
+
+```{r}
+errores <- tabla.errores(
+  predicciones = list(pred.snaive.original$mean,pred.snaive5$mean,pred.snaive11$mean ), 
+  real = serie.test.original,
+  nombres = c("S Naive Original","S Naive 5","S Naive 11")
+)
+
+errores
+
+grafico.errores(errores)
+```
+
+El mejor modelo es con la serie original, es decir sin suavizado.
+
+## f) Con el mejor modelo encontrado en el punto anterior genere la predicción  de una semana, pero esta vez utilizando toda la serie de tiempo. Grafique la serie original y la predicción.
+
+```{r}
+modelo.final <- snaive(serie, h =7)
+pred <- forecast(modelo.final, h = 7)
+
+fecha <- fecha.inicio + days(0:420)
+
+predicciones <- ts.union(
+  serie.suavizada.covid11, `Predicción` = pred$mean,
+  LimInf = pred$lower[, 2],
+  LimSup = pred$upper[, 2]
+)
+
+predicciones <- xts(xts(predicciones, order.by = fecha))
+
+dygraph(predicciones, width = "100%") %>% 
+  dySeries(c("LimInf", "Predicción", "LimSup"), label = "Predicción") %>%
+  dyRangeSelector()
+
+```
+
+# 3. __[25 puntos]__ La tabla `trafico_tren_V2.csv` contiene la cantidad de personas que se suben al metro por hora. Tomando los datos a partir del 15 de Enero del 2016 realice lo siguiente:
+
+```{r}
+datos <- read.table("../datos/trafico_tren_V2.csv", header = T, sep = ",", dec= ",")
+
+str(datos)
+```
+
+a) Encuentre las fechas faltantes (sin incluir fines de semana) y con un suavizado de 25 impute valor a dichas fechas.
+
+```{r}
+library(dplyr)
+
+datos$date_time <- datos$date_time <- as.POSIXct(datos$date_time, format = "%Y-%m-%d %H:%M:%S")
+
+#filtramos los datos apartir del 15 de enero del 2016
+datos <- datos%>%
+filter(date_time >= as.POSIXct("2016-01-15"))
+
+
+fecha.inicio <- as.POSIXct("2016-01-15")
+fecha.final  <- as.POSIXct("2018-09-30")
+
+total.fechas <- seq(fecha.inicio, fecha.final, by = "hours")
+
+faltan.fechas <- total.fechas[!total.fechas %in% datos$date_time]
+
+# Unimos y ordenamos las fechas faltantes.
+
+datos <- union_all(datos, data.frame(date_time = faltan.fechas))
+
+datos <- datos[order(datos$date_time), ]
+
+# Realizaremos un suavizado de 11.
+
+datos.suavizado <- suavizado(datos$traffic_volume, 25)
+
+datos$traffic_volume[which(is.na(datos$traffic_volume))] <- datos.suavizado[which(is.na(datos$traffic_volume))]
+
+
+```
+
+## b) Verifique la normalidad de la serie de tiempo. Puede probar solo de una forma.
+
+```{r, fig.width=6, fig.height=3}
+h <- hist(diff(datos$traffic_volume), plot = F)
+x <- seq(min(h$mids, na.rm = T), max(h$mids, na.rm = T), length = length(datos$traffic_volume))
+promedio   <- mean(diff(datos$traffic_volume), na.rm = T)
+desviacion <- sd(diff(datos$traffic_volume), na.rm = T)
+normalidad <- dnorm(x, promedio, desviacion)
+
+ggplot() + geom_histogram(aes(x = diff(datos$traffic_volume), y = ..density..), bins = 30, color = "white") + 
+  geom_density(aes(x = diff(datos$traffic_volume), y = ..density.., color = "Densidad"), size = 2) +
+  geom_line(aes(x = x, y = normalidad, color = "Normalidad"), size = 2)+
+  theme_minimal()
+```
+
+## c) Convierta a serie de tiempo (utilice patrón-estacional diario) y realice una descomposición de la serie de tiempo.
+
+```{r}
+serie <- ts(datos$traffic_volume, frequency = 24, start = c(1,1) )
+
+serie
+
+autoplot(stl(serie, s.window = "periodic"))
+
+```
+
+## d) Usando las  últimas 24 horas para pruebas y el resto de fechas para entrenamiento genere los modelos de `Estacional Ingenuo` y el de `Descomposición`, luego en un solo gráfico muestre la serie de entrenamiento, la serie de prueba y el resultado de la predicción de cada uno de los modelos anteriores.
+
+```{r}
+serie.train <- head(serie,-24)
+serie.test <- tail(serie,24)
+```
+
+### Estacional Naive
+
+```{r}
+metodo.snaive <- snaive(serie.train, h = 24)
+pred.snaive <- forecast(metodo.snaive, h = 24)
+
+```
+
+
+### Descomposición
+
+```{r}
+metodo.stl <- stl(serie.train, s.window = "periodic")
+pred.stl <- forecast(metodo.stl, h = 24)
+```
+
+```{r}
+
+fechas <- fecha.inicio + hours(0:((989*24)+23))
+
+predicciones <- ts.union(serie.train, Original = serie.test, S.Naïve = pred.snaive$mean,Descomposición = pred.stl$mean)
+
+predicciones <- xts(xts(predicciones, order.by = fechas))
+dygraph(predicciones, width = "100%") %>%
+    dyRangeSelector()
+```
+
+## e) Con un gráfico mida el error y determine cuál modelo es el mejor.
+
+```{r}
+errores <- tabla.errores(
+  predicciones = list(pred.snaive$mean, pred.stl$mean), 
+  real = serie.test,
+  nombres = c("S Naive", "STL/Descomposición")
+)
+
+grafico.errores(errores)
+
+errores
+```
+
+El mejor modelo es `S Naive`.
+
+## f) Con el mejor modelo encontrado en el punto anterior genere la predicción de 12 horas, pero esta vez utilizando toda la serie de tiempo. Grafique la serie original y la predicción.
+
+```{r}
+modelo.final <- snaive(serie, h = 24)
+pred <- forecast(modelo.final, h = 24)
+
+fechas <- fecha.inicio + hours(0:23783)
+
+predicciones <- ts.union(
+  serie, `Predicción` = pred$mean,
+  LimInf = pred$lower[, 2],
+  LimSup = pred$upper[, 2]
+)
+
+
+predicciones <- xts(xts(predicciones, order.by = fechas))
+
+dygraph(predicciones, width = "100%") %>% 
+  dySeries(c("LimInf", "Predicción", "LimSup"), label = "Predicción") %>%
+  dyRangeSelector()
+```
+
