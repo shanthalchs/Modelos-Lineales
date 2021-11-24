@@ -3,12 +3,14 @@ title: "Tarea 9 - Modelos Lineales"
 author: "Shanthal Chavarría"
 date: "`r Sys.Date()`"
 output:
-  html_document: 
-    df_print: paged 
+  html_document:
+    df_print: paged
     highlight: kate
-    toc: TRUE
-    toc_float: TRUE
-editor_options: 
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+editor_options:
   chunk_output_type: console
 ---
 
@@ -683,7 +685,7 @@ Programe una función recursiva que permita verificar los datos que se muestran 
 ![](captura.png)
 </center> 
 
-```{r}
+```{r, eval=FALSE}
 library(fpp2)
 
 data("austourists")
@@ -692,7 +694,7 @@ datos <- tail(austourists,-24)
 ```
 
 
-```{r}
+```{r, eval=FALSE}
 
 # Valores iniciales
 m <- 4

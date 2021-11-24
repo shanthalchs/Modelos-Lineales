@@ -1,0 +1,11 @@
+base
+knitr
+rmdformats
+lubridate
+dplyr
+zoo
+xts
+ggplot2
+forecast
+dygraphs
+reshape
