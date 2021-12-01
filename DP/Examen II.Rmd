@@ -1,0 +1,284 @@
+---
+title: "Examen II - Distribuciones de Pérdidas"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    df_print: paged
+    highlight: kate
+    toc: yes
+    toc_float: yes
+editor_options:
+  chunk_output_type: inline
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+
+```
+
+# 1. Considere los siguientes datos:
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{c c c c c c c c c c } 
+    \hline
+    27 & 82 & 115 & 126 & 155 & 161 & 243 & 294 & 340 & 384 \\ [0.5ex] 
+    457 & 680 & 855 & 877 & 974 & 1.193 & 1.340 & 1.884 & 2.558 & 3.476 \\ 
+    \hline
+  \end{tabular}
+\end{table}
+    
+## 1. Calcule las funciones de densidad y probabilidad empíricas, y grafique en comparación con la respectiva distribución exponencial.
+        
+```{r}
+library(fitdistrplus)
+
+datos <- c(27, 82 , 115,126, 155, 161, 243, 294, 340, 384, 457, 680, 855, 877, 974,  1193, 1340, 1884, 2558, 3476)
+
+
+f.exp<-fitdist(datos, "exp",method = "mme")
+f.exp
+f.gamma<-fitdist(datos, "gamma", method = "mme")
+f.gamma
+par(mfrow=c(2,2))
+plot.legend<-c("exp","gamma")
+denscomp(list(f.exp,f.gamma), legendtext=plot.legend)
+qqcomp(list(f.exp, f.gamma), legendtext=plot.legend)
+cdfcomp(list(f.exp, f.gamma), legendtext=plot.legend)
+ppcomp(list(f.exp, f.gamma), legendtext=plot.legend)
+```   
+
+## 2.  Realice los test Kolmogorov-Smirnov y Anderson-Darling y analice los resultados.
+
+```{r}
+comparacion <- gofstat(f = list(f.exp, f.gamma))
+comparacion
+```
+
+## 3. Determine si un modelo gamma es más apropiado que el modelo exponencial.
+
+El más apropiado es gamma debido al resultado de las pruebas y el hecho de que los valores extremos se acercan más al ajuste de la gamma.
+
+# 2. Simule 1,000 observaciones de una distribución gamma con $\alpha = 2$ y $\theta = 500$. Realice las pruebas de bondad de ajuste de chi-cuadrado y Kolmogorov-Smirnov para ver si los valores indicados eran en realidad de esa distribución
+
+```{r}
+library(EnvStats)
+
+set.seed(3)
+
+sim <- rgamma(1000,2,500)
+hist(sim)
+
+
+
+f<-fitdist(sim,"gamma",method = "mle")
+f
+
+
+test.chi <-  gofTest(sim, test = "chisq", distribution = "gamma",
+    param.list = list(shape = 2, scale = 1/500))
+
+
+test.chi$p.value
+
+test.KS <- gofTest(sim, test = "ks", distribution = "gamma",
+    param.list = list(shape = 2, scale = 1/500))
+
+
+test.KS$p.value
+
+
+ks.test(sim,"pgamma",2,500)
+
+
+```
+
+Tenemos un valor p de 0.63, por lo tanto no rechazamos la hipótesis nula y por lo tanto los datos simulados siguen una distribución Gamma.
+
+# 3. Utilice los datos BMW, del paquete evir y ajuste un modelo para los valores extremos.
+  
+
+```{r}
+library(evir)
+
+data(bmw)
+
+plot(bmw,type="l") # reclamos
+
+hist(bmw)
+```
+
+```{r}
+#findthresh(danish, 100)
+umbral=quantile(bmw,0.95)[[1]]
+umbral
+```
+
+Aunque observamos que hay valores extremos muy grandes y muy pequeños, para efectos de examen solo ajustaremos para la cola derecha.
+
+```{r}
+plot(bmw,type="l")
+abline(umbral,0,col="red")
+```
+
+Seleccionamos los valores extremos muy grandes.
+
+```{r}
+bmw_max = bmw [bmw > umbral]
+bmw_max 
+```
+
+Valores fuera del umbral
+
+```{r}
+plot(bmw_max,type="l")
+hist(bmw_max)
+```
+
+```{r}
+## calculariamos los excedentes
+excedente_bmw = bmw_max - umbral
+excedente_bmw
+hist(excedente_bmw)
+
+```
+
+```{r}
+emplot(bmw) # distribución empírica
+
+```
+
+```{r}
+meplot(bmw, omit = 0) # gráfico los excesos medios de la muestra sobre los umbrales crecientes
+```
+
+```{r}
+fit<- gpd(bmw,threshold=umbral, nextremes=NA) # umbral y cantidad
+fit
+```
+
+Observamos que el modelo si ajusta bien.
+
+```{r}
+#gráfico de la cola de la distribución subyacente de los datos.
+tp<-tailplot(fit)
+
+tp
+```
+
+```{r}
+# Los 3 parámetros – localización, escala, forma
+
+loc<-tp$location
+scal<-tp$scale
+shape<-tp$shape
+
+loc;scal;shape
+```
+
+```{r}
+riskmeasures(fit, 0.99)
+```
+
+# 4. Considere la spline de suavizado cúbico natural que suaviza los puntos (0, 0), (1, 2), (2, 1), (3, 3) usando $p = 0.9$ y desviaciones estándar de 0.5.
+
+
+## (a) Obtenga los valores de las intersecciones de los nodos.
+
+```{r}
+p <- 0.9
+H <- matrix(c(4,1,1,4),nrow = 2, byrow = T)
+H
+R <- matrix(c(1,-2,1,0,0,1,-2,1),nrow = 2, byrow = T)
+R
+R1 <- 6*R
+R1
+S <- diag(x = 0.25, nrow = 4, ncol = 4)
+S
+res <- R1%*%S%*%t(R1)
+res
+
+res2 <- H + ((1-p)/(6*p))*res
+res2
+
+inversa <- solve(res2)
+inversa
+
+y <-c(0,2,1,3)
+y
+
+a <- y - (1-p)/(6*p) * S%*%t(R1) %*% inversa %*% R1%*%y
+
+cat("Respuesta: a = ", a)
+```
+
+
+## (b) Obtenga el spline de suavizado cúbico natural como el spline de interpolación natural.
+
+```{r}
+H
+u <- matrix(c(-11.571,11.571))
+
+m <- solve(H)%*%u
+m
+
+m1 <-c(0,m,0) 
+m1
+y<- c(0,2,1,3)
+x<- c(0,1,2,3)
+
+h <- c(1,1,1)
+g <- c(4,4)
+u<- c(-18,18)
+
+xj<-c()
+aj<- c()
+bj <- c()
+cj <- c()
+dj <- c()
+for (i in 1:3){
+  
+  xj[i] <- x[i]
+  
+  aj[i] <- a[i]
+  
+  bj[i] <- ((a[i+1]-a[i])/h[i]) - ((h[i]*(2*m1[i] + m1[i+1]))/6)
+  
+  cj[i] <- m1[i]/2
+  
+  dj[i] <- (m1[i+1]-m1[i])/(6*h[i])
+  
+  print(i)
+}
+
+
+data.frame(xj,aj,bj,cj,dj)
+```
+
+## (c) Grafique el spline resultante de $x = 0.5$ a $x = 2.5$.
+
+```{r}
+
+plot(x, y, main = "spline(.)")
+lines(spline(x, y, n = 201), col = 2)
+lines(spline(x, y, n = 201, method = "natural"), col = 3)
+lines(spline(x, y, n = 201, method = "periodic"), col = 4)
+legend(6,25, c("fmm","natural","periodic"), col=2:4, lty=1)
+```
+
