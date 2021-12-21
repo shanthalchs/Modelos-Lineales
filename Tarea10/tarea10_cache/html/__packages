@@ -1,0 +1,14 @@
+base
+knitr
+rmdformats
+fpp2
+ggplot2
+forecast
+fma
+expsmooth
+zoo
+xts
+dplyr
+dygraphs
+lubridate
+reshape

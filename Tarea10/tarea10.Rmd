@@ -1,0 +1,718 @@
+---
+title: "Tarea 10 - Modelos Lineales"
+author: "Shanthal Chavarría"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    highlight: kate
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+---
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+
+Sys.setlocale(locale = "es_ES.UTF-8")
+```
+
+# 1. __[30 puntos]__ Para este ejercicio usaremos la serie tiempo `hsales` sobre ventas mensuales de casas
+del paquete `fpp2` (también están en el archivo `ventas_casas.csv`). Utilizando todos los datos realice lo siguiente:
+
+## a) Cargue los datos como sigue: `serie.hsales <- hsales`.
+
+```{r}
+library(fpp2)
+
+serie.hsales <- hsales
+```
+
+## b) Grafique la serie de tiempo `serie.hsales`.
+
+```{r}
+library(xts)
+library(dplyr)
+library(ggplot2)
+library(forecast)
+library(dygraphs)
+library(lubridate)
+
+dygraph(serie.hsales, width = "100%") %>%
+  dyRangeSelector()
+```
+
+## c) Observe que la serie de tiempo es estacionaria, pues muestra una cierta periodicidad cada 10 años. Si se aplica una diferencia a la serie de tiempo y aplicándoles logaritmo sí se ven más claramente que la serie de tiempo es estacionaria. Para esto haga lo siguiente:
+
+`log.dif.hsales <- diff(log(serie.hsales))`
+`autoplot(log.dif.hsales, main =`
+      `"Diferencia del logaritmo de las ventas mensuales de casas") +`
+  `labs(subtitle = "Estados Unidos: 1973-1995.") +`
+  `xlab("A~no") + ylab("Diferencia")`
+
+```{r}
+log.dif.hsales <- diff(log(serie.hsales))
+autoplot(log.dif.hsales, main =
+"Diferencia del logaritmo de las ventas mensuales de casas") +
+labs(subtitle = "Estados Unidos: 1973-1995.") +
+xlab("Año") + ylab("Diferencia")+
+  theme_minimal()
+```
+
+## d) Usando la serie original `serie.hsales`, encuentre el tercer periodo más importante, luego grafique el periodograma.
+
+```{r}
+# Calculamos el espectro y la frecuencia con la función spec.pgram.
+res <- spec.pgram(serie.hsales, log = "no", plot = F)
+
+# Ordenamos el espectro con respecto a la frecuencia en orden decreciente
+max <- order(res$spec, res$freq, decreasing = TRUE)
+
+# Tomamos las primeras 3 posiciones. El valor 1 no se toma en cuenta pues es toda la serie.
+max <- max[max != 1][1:3] 
+
+# Tomamos de las frecuencias las posiciones obtenidas.
+
+max <- res$freq[max]
+
+# Finalmente obtenemos los periodos más importantes, se usa 12 en el numerador porque la frecuencia es 12.
+
+periodos <- 12/max
+periodos
+
+dygraph(res, 'Peridiograma', 'Frecuencia', 'Espectro', width = "100%") %>%
+  dyEvent(max[1], color = "green") %>%
+  dyEvent(max[2], color = "red") %>%
+  dyEvent(max[3], color = "navy") %>%
+  dyRangeSelector() %>% dyOptions(drawPoints = TRUE, pointSize = 2)
+```
+
+## e) Usando la serie original, gráfique la auto-correlación Simple ACF y la Parcial PACF. Con base en estos gráficos y el periodograma explique por qué el modelo ARIMA(1, 1, 1)(12, 1, 12) [12] es el más adecuado.
+
+```{r}
+acf(serie.hsales)
+```
+
+```{r}
+pacf(serie.hsales)
+```
+
+## f ) El modelo anterior tiene problemas de convergencia, por esta razón, utilizando 12 meses para pruebas y el resto de fechas para entrenamiento, genere el modelo ARIMA(0, 1, 1)(12, 1, 12) [12].
+
+```{r}
+train <- head(serie.hsales, -12)
+test <- tail(serie.hsales, 12)
+
+modelo <- arima(serie.hsales, order = c(0, 1, 1), seasonal = list(order = c(2, 1, 2),
+    period = 12))
+pred <- predict(modelo, n.ahead = 12)
+pred
+```
+
+## g) Genere también los métodos HOLT-WINTERS, HOLT-WINTERS Calibrado, Redes Neuronales, AUTO ARIMA y ARIMA CALIBRADO y compare los resultados.
+
+### Holt-Winters
+
+```{r}
+modelo.HW <- hw(train,h = 12)
+pred.HW <- forecast(modelo.HW, h = 12)
+```
+
+### Calibrado Holt-Winters
+
+```{r}
+calibrar.HW <- function(entrenamiento, prueba, paso = 0.1) {
+  # se calculan todas las combinaciones para los parametros
+  params <- purrr::cross(list(a = seq(0, 1, by = paso), b = seq(0, 1, by = paso), g = seq(0, 1, by = paso)))
+  
+  # se calcula un modelos para cada combinacion de parametros
+  hw_secure <- purrr::possibly(forecast::hw, otherwise = NULL)
+  models <- invisible(purrr::map(params, ~suppressWarnings(hw_secure(
+    entrenamiento, alpha = ifelse(.$a == 0, F, .$a), beta = ifelse(.$b == 0, F, .$b), 
+    gamma = ifelse(.$g == 0, F, .$g), h = length(prueba)))))
+  
+  # se realiza la prediccion con cada uno de los modelos
+  predictions <- purrr::map(models, ~{
+    if (is.null(.)) {
+      return(NULL)
+    }
+    forecast(., h = length(prueba))
+  })
+  
+  # se calcula el error para cada prediccion
+  error <- purrr::map_dbl(predictions, ~{
+    if (is.null(.)) {
+      return(Inf)
+    }
+    sum((as.numeric(prueba) - as.numeric(.$mean))^2)
+  })
+  
+  # se retorna el modelo con el menor error
+  best_model <- models[[which.min(error)]]
+  p <- params[[which.min(error)]]
+  best_model$call <- call("HoltWinters", y = quote(datos), 
+                          alpha = ifelse(p$a == 0, F, p$a), 
+                          beta = ifelse(p$b == 0, F, p$b), 
+                          gamma = ifelse(p$g == 0, F, p$g))
+  return(best_model$call)
+}
+
+calibrar.HW(train, test)
+```
+
+```{r}
+modelo.calibrado <- hw(train, alpha = 0.4, beta = 0.1, gamma = 0.3, h = 12)
+pred.calibrado <- forecast(modelo.calibrado, h = 12)
+
+```
+
+### Redes Neuronales
+
+```{r}
+modelo.RN <- nnetar(train, size = 40)
+pred.RN <- forecast(modelo.RN, h = 12)
+```
+
+### Auto-Arima
+
+```{r}
+auto.arima(train)
+
+modelo.arima <- arima(train, order = c(1, 0, 0), seasonal = list(order = c(1,
+    1, 0), period = 12))
+pred.arima <- predict(modelo.arima, n.ahead = 12)
+```
+
+### ARIMA Calibrado
+
+```{r}
+calibrar.arima <- function(entrenamiento = NULL, prueba = NULL, periodo = NA_integer_,
+    ar = 0:2, es = 0:1) {
+    # se calculan todas las combinaciones para los parametros
+    params <- purrr::cross(list(a = ar, b = ar, c = ar, d = es, e = es, f = es))
+
+    # se calcula un modelos para cada combinacion de parametros
+    arima_secure <- purrr::possibly(stats::arima, otherwise = NULL)
+    models <- purrr::map(params, ~suppressWarnings(arima_secure(entrenamiento, order = c(.$a,
+        .$b, .$c), seasonal = list(order = c(.$d, .$e, .$f), period = periodo))))
+
+    # se realiza la prediccion con cada uno de los modelos
+    predictions <- purrr::map(models, ~{
+        if (is.null(.)) {
+            return(NULL)
+        }
+        forecast(., h = length(prueba))
+    })
+
+    # se calcula el error para cada prediccion
+    error <- purrr::map_dbl(predictions, ~{
+        if (is.null(.)) {
+            return(Inf)
+        }
+        sum((as.numeric(prueba) - as.numeric(.$mean))^2)
+    })
+
+    # se retorna el modelo con el menor error
+    best_model <- models[[which.min(error)]]
+    p <- params[[which.min(error)]]
+    best_model$call <- call("arima", x = quote(datos), order = as.numeric(c(p$a,
+        p$b, p$c)), seasonal = list(order = as.numeric(c(p$d, p$e, p$f)), period = periodo))
+    return(best_model)
+}
+
+```
+
+
+```{r}
+calibrar.arima(train, test, periodo = 12, 0:3, 0:1)
+
+modelo.arima.calibrado <- arima(train, order = c(1, 2, 3), seasonal = list(order = c(0,
+    1, 1), period = 12))
+
+pred.arima.calibrado <- predict(modelo.arima.calibrado, n.ahead = 12)
+```
+
+### Errores
+
+```{r}
+RSS <- function(Pred, Real) {
+  return(sum((Real - Pred)^2))
+}
+MSE <- function(Pred, Real) {
+  N <- length(Real)
+  rss <- sum((Real - Pred)^2)
+  return((1/N) * rss)
+}
+RMSE <- function(Pred, Real) {
+  N <- length(Real)
+  rss <- sum((Real - Pred)^2)
+  return(sqrt((1/N) * rss))
+}
+RE <- function(Pred, Real) {
+    res <- sum(abs(Real - Pred))/sum(abs(Real))
+    return(res)
+}
+
+tabla.errores <- function(predicciones, real, nombres = NULL) {
+    r <- data.frame()
+    for (pred in predicciones) {
+        r <- rbind(r, data.frame(MSE = MSE(pred, real), RMSE = RMSE(pred, real),
+            RE = RE(pred, real), CORR = cor(pred, real)))
+    }
+    row.names(r) <- nombres
+    return(r)
+}
+
+grafico.errores <- function(errores) {
+    library(ggplot2)
+    library(reshape)
+
+    centros <- as.data.frame(apply(errores, 2, function(i) scales::rescale(i, to = c(0,
+        100))))
+
+    res <- melt(t(centros), varnames = c("E", "Modelos"))
+    res <- res[order(res$E, decreasing = F), ]
+    res$M <- as.character(res$M)
+    y = c(0, 25, 50, 75, 100)
+
+    ggplot(res, aes(x = E, y = value, group = Modelos, color = Modelos, fill = Modelos)) +
+        geom_polygon(alpha = 0.3, size = 1) + geom_point(size = 3) + theme_minimal() +
+        theme(axis.text.y = element_blank()) + xlab("") + ylab("") + scale_y_continuous(limits = c(-10,
+        100), breaks = y) + annotate("text", x = 0.5, y = y, label = paste0(y, "%"),
+        color = "gray60") + ggproto("CordRadar", CoordPolar, theta = "x", r = "y",
+        start = 0, direction = sign(1))
+}
+
+errores <- tabla.errores(predicciones = list(pred.arima$pred, pred.arima.calibrado$pred,
+    pred.HW$mean, pred.calibrado$mean, pred.RN$mean), real = test)
+
+row.names(errores) <- c("AUTO.ARIMA", "ARIMA FUERZA BRUTA", "HOLT-WINTERS", "HW FUERZA BRUTA", "REDES")
+
+errores
+
+grafico.errores(errores)
+```
+
+```{r}
+predicciones <- ts.union(train, original = test, AUTO.ARIMA = pred.arima$pred,
+    `arima Fuerza Bruta` = pred.arima.calibrado$pred, `Holt-Winters` = pred.HW$mean, `HW Fuerza Bruta` = pred.calibrado$mean ,
+    `Redes Neuronales` = pred.RN$mean)
+
+dygraph(predicciones, width = "100%") %>%
+    dyRangeSelector()
+```
+
+
+# 2. [30 puntos] El archivo `covid19_CR.csv` contiene la cantidad de casos nuevos diarios de Covid 19 registrados en Costa Rica desde el 6 de marzo del 2020 hasta el 23 de abril de 2021, cargue la tabla de datos y realice lo siguiente:
+
+```{r}
+datos <- read.table("../datos/covid19_CR.csv", sep = ";", dec = ".", header = T)
+```
+
+## a) Convierta a serie de tiempo `ts` utilizando una frecuencia de forma que el Patrón-Estacional sea semanal.
+
+```{r}
+library(lubridate)
+library(dplyr)
+
+datos <- datos%>%
+  mutate(FECHA = as.POSIXct(FECHA, format = "%Y-%m-%d"))
+
+fecha.inicio <- datos[1,1]
+fecha.final <- datos[nrow(datos),1]
+
+serie <- ts(datos$casos_nuevos, frequency = 7, start = c(1,wday(fecha.inicio)))
+```
+
+## b) Gráfique la autocorrelación Simple y la Parcial.
+
+```{r}
+acf(serie)
+```
+
+```{r}
+pacf(serie)
+```
+
+c) Determine y grafique los 3 periodos más importantes
+
+```{r}
+# Calculamos el espectro y la frecuencia con la función spec.pgram.
+res <- spec.pgram(serie, log = "no", plot = F)
+
+# Ordenamos el espectro con respecto a la frecuencia en orden decreciente
+max <- order(res$spec, res$freq, decreasing = TRUE)
+
+# Tomamos las primeras 3 posiciones. El valor 1 no se toma en cuenta pues es toda la serie.
+max <- max[max != 1][1:3] 
+
+# Tomamos de las frecuencias las posiciones obtenidas.
+
+max <- res$freq[max]
+
+# Finalmente obtenemos los periodos más importantes, se usa 12 en el numerador porque la frecuencia es 12.
+
+periodos <- 7/max
+periodos
+
+dygraph(res, 'Peridiograma', 'Frecuencia', 'Espectro', width = "100%") %>%
+  dyEvent(max[1], color = "green") %>%
+  dyEvent(max[2], color = "red") %>%
+  dyEvent(max[3], color = "navy") %>%
+  dyRangeSelector() %>% dyOptions(drawPoints = TRUE, pointSize = 2)
+```
+
+## d) Usando el último mes de abril para pruebas y el resto de fechas para entrenamiento genere modelos utilizando `HOLT-WINTERS`, `HOLT-WINTERS Calibrado`, `Redes Neuronales`, `AUTO ARIMA` y `ARIMA CALIBRADO`, para este último utilice el tercer periodo más importante encontrado en el punto anterior, luego en un solo gráfico muestre la serie de entrenamiento, la serie de prueba y el resultado de la predicción de cada uno de los modelos anteriores.
+
+```{r}
+train <- head(serie, -23)
+test <- tail(serie, 23)
+
+```
+
+### Holt-Winters
+
+```{r}
+modelo.HW <- hw(train,h = 23)
+pred.HW <- forecast(modelo.HW, h = 23)
+```
+
+### Calibrado Holt-Winters
+
+```{r}
+calibrar.HW(train, test)
+```
+
+```{r}
+modelo.calibrado <- hw(train, alpha = 0.4, beta = 0.3, gamma = 0.1, h = 23)
+pred.calibrado <- forecast(modelo.calibrado, h = 23)
+
+```
+
+### Redes Neuronales
+
+```{r}
+modelo.RN <- nnetar(train, size = 40)
+pred.RN <- forecast(modelo.RN, h = 23)
+```
+
+### Auto-Arima
+
+```{r}
+auto.arima(train)
+
+modelo.arima <- arima(train, order = c(1, 1, 1), seasonal = list(order = c(0,1, 1), period = 7))
+pred.arima <- predict(modelo.arima, n.ahead = 23)
+```
+
+### ARIMA Calibrado
+
+```{r}
+calibrar.arima(train, test, periodo = 7, 0:3, 0:1)
+
+modelo.arima.calibrado <- arima(train, order = c(1, 2, 0), seasonal = list(order = c(1,
+    1, 1), period = 7))
+
+pred.arima.calibrado <- predict(modelo.arima.calibrado, n.ahead = 23)
+```
+
+
+# e) Con un gráfico mida el error de cada uno de los modelos anteriores y determine cuál de ellos es el mejor.
+
+```{r}
+
+errores <- tabla.errores(predicciones = list(pred.arima$pred, pred.arima.calibrado$pred,
+    pred.HW$mean, pred.calibrado$mean, pred.RN$mean), real = test)
+
+row.names(errores) <- c("AUTO.ARIMA", "ARIMA FUERZA BRUTA", "HOLT-WINTERS", "HW FUERZA BRUTA", "REDES")
+
+errores
+
+grafico.errores(errores)
+```
+
+# f) Con el mejor modelo encontrado en el punto anterior genere la predicción de una semana, pero esta vez utilizando toda la serie de tiempo. Grafique la serie original y la predicción junto con el limite inferior y superior.
+
+```{r}
+
+modelo.arima.calibrado <- arima(serie, order = c(1, 2, 0), seasonal = list(order = c(1,
+    1, 1), period = 7))
+
+pred <- predict(modelo.arima.calibrado, n.ahead = 7)
+
+p <- ts.union(
+  prediccion = pred$pred, LimInf = pred$pred -
+    pred$se, LimSup = pred$pred + pred$se
+)
+
+fecha <- fecha.inicio + days(0:420)
+
+predicciones <- ts.union(serie, p)
+
+predicciones <- xts(xts(predicciones, order.by = fecha))
+
+dygraph(predicciones, width = "100%") %>%
+  dySeries("serie", label = "Actual") %>%
+  dySeries(c("p.LimInf", "p.prediccion", "p.LimSup"), label = "Predicción") %>%
+  dyRangeSelector(height = 20, strokeColor = "") %>%  
+  dyOptions(axisLineColor = "navy", gridLineColor = "lightblue")
+```
+
+# 3. [25 puntos] El archivo `USA_CR.csv` contiene los movimientos de compra y venta del colón con respecto al dólar desde el 15 de Enero del 2016 al 20 de Septiembre del 2019. Utilizando la variable `TIPO_CAMBIO_VENTA` realice lo siguiente:
+
+```{r}
+datos <- read.table("../datos/USA_CR.csv", header = T, sep = ";", dec = ",")
+#pasamos a formato fecha
+datos$FECHA <- as.POSIXct(datos$FECHA, format = "%d %b %Y")
+
+datos <- na.omit(datos)
+
+str(datos)
+```
+
+## a) Encuentre las fechas faltantes (sin incluir fines de semana) y con un suavizado de 5 impute valor a dichas fechas.
+
+```{r}
+fecha.inicio <- datos$FECHA[1]
+fecha.final <- datos$FECHA[nrow(datos)]
+
+total.fechas <- seq(from = fecha.inicio, to = fecha.final, by = "day")
+
+faltan.fechas <- total.fechas[!total.fechas %in% datos$FECHA]
+
+
+faltan.fechas
+
+
+
+```
+
+## b) Convierta a serie de tiempo `ts` utilizando una frecuencia de forma que el Patrón-Estacional sea semanal.
+
+```{r}
+serie <- ts(datos$TIPO_CAMBIO_VENTA, frequency = 7, start = c(1,wday(fecha.inicio)))
+
+serie
+```
+
+
+## c) Usando el último mes para pruebas y el resto de fechas para entrenamiento genere un modelo con `HOLT-WINTERS`, `HOLT-WINTERS Calibrado`, `Redes Neuronales`, `AUTO ARIMA` y `ARIMA CALIBRADO`, para este último utilice un periodo de 5.
+
+```{r}
+train <- head(serie, -20)
+test <- tail(serie, 20)
+
+```
+
+### Holt-Winters
+
+```{r}
+modelo.HW <- hw(train,h = 20)
+pred.HW <- forecast(modelo.HW, h = 20)
+```
+
+### Calibrado Holt-Winters
+
+```{r}
+calibrar.HW(train, test)
+```
+
+```{r}
+modelo.calibrado <- hw(train, alpha = 0.8, beta = 0.1, gamma = 0.1, h = 20)
+pred.calibrado <- forecast(modelo.calibrado, h = 20)
+
+```
+
+### Redes Neuronales
+
+```{r}
+modelo.RN <- nnetar(train, size = 40)
+pred.RN <- forecast(modelo.RN, h = 20)
+```
+
+### Auto-Arima
+
+```{r}
+auto.arima(train)
+
+modelo.arima <- arima(train, order = c(1, 1, 0), seasonal = list(order = c(0,0, 1), period = 7))
+pred.arima <- predict(modelo.arima, n.ahead = 20)
+```
+
+### ARIMA Calibrado
+
+```{r}
+calibrar.arima(train, test, periodo = 5, 0:3, 0:1)
+
+modelo.arima.calibrado <- arima(train, order = c(1, 0, 3), seasonal = list(order = c(1,
+    0, 1), period = 5))
+
+pred.arima.calibrado <- predict(modelo.arima.calibrado, n.ahead = 20)
+```
+
+
+# d) Con un gráfico mida el error de cada uno de los modelos anteriores y determine cuál de ellos es el mejor.
+
+```{r}
+
+errores <- tabla.errores(predicciones = list(pred.arima$pred, pred.arima.calibrado$pred,
+    pred.HW$mean, pred.calibrado$mean, pred.RN$mean), real = test)
+
+row.names(errores) <- c("AUTO.ARIMA", "ARIMA FUERZA BRUTA", "HOLT-WINTERS", "HW FUERZA BRUTA", "REDES")
+
+errores
+
+grafico.errores(errores)
+```
+
+## e) Con el mejor modelo encontrado en el punto anterior genere la predicción de un mes, pero esta vez utilizando toda la serie de tiempo. Grafique la serie original y la predicción junto con el limite inferior y superior con `dygraph`.
+
+```{r}
+#con toda la serie 
+modelo <-  nnetar(serie, size = 40)
+
+pred <- forecast(modelo, h = 30,PI = TRUE)
+
+p <- ts.union(
+  prediccion = pred$mean, LimInf = pred$lower[,
+    2], LimSup = pred$upper[, 2])
+
+predicciones <- ts.union(serie, p)
+
+fechas <- fecha.inicio + days(0:982)
+  
+predicciones <- xts(xts(predicciones, order.by = fechas))
+
+dygraph(predicciones, width = "100%") %>%
+  dySeries("serie", label = "Actual") %>%
+  dySeries(c("p.LimInf", "p.prediccion", "p.LimSup"), label = "Predicción") %>%
+  dyRangeSelector(height = 20, strokeColor = "") %>%  
+  dyOptions(axisLineColor = "navy", gridLineColor = "lightblue")
+
+
+```
+
+# 4. __[10 puntos]__ Desarrolle los ejercicios propuesto en las filminas 16, 17 y 18 de la presentación Funciones de Autocorrelación, Correlograma - ACF y Correlograma Parcial - PACF.
+
+Los demás ejercicios del 5 al 9 están el pdf.
+
+## 2.1
+
+
+```{r}
+Xt <- c(10, 3,-1, 3, 2, 5, 3, 2,-1, 3)
+
+p1 <- round(cor(Xt[-1],Xt[-length(Xt)]),digits = 3)
+
+p2 <- round(cor(Xt[-c(1:2)],Xt[-(rep(length(Xt),2)-0:1)]),digits = 3)
+
+p3 <- round(cor(Xt[-c(1:3)],Xt[-(rep(length(Xt),3)-0:2)]),digits = 3)
+
+p1
+p2
+p3
+```
+
+## 2.2
+
+```{r}
+p11 <- p1
+
+p22 <- (p2-p1^2)/(1-p1^2)
+
+p33 <- (p1^3-p1*p2*(2-p2)+p3*(1-p1^2))/(1-p2^2-2*p1^2*(1-p2))
+
+p11
+p22
+p33
+```
+
+## 2.3
+
+```{r}
+
+p4 <- cor(Xt[-c(1:4)],Xt[-(rep(length(Xt),4)-0:3)])
+
+P4 <- cbind(c(1,p1,p2,p3),c(p1,1,p1,p2),
+            c(p2,p1,1,p1),c(p3,p2,p1,1))
+P44 <- cbind(c(1,p1,p2,p3),c(p1,1,p1,p2),
+                     c(p2,p1,1,p1),c(p1,p2,p3,p4))
+p44 <- det(P44)/det(P4)
+p44
+
+p5 <- cor(Xt[-c(1:5)],Xt[-(rep(length(Xt),5)-0:4)])
+P5 <- cbind(c(1,p1,p2,p3,p4),c(p1,1,p1,p2,p3),
+            c(p2,p1,1,p1,p2),c(p3,p2,p1,1,p1),
+            c(p4,p3,p2,p1,1))
+P55 <- cbind(c(1,p1,p2,p3,p4),c(p1,1,p1,p2,p3),
+                     c(p2,p1,1,p1,p2),c(p3,p2,p1,1,p1),
+                     c(p1,p2,p3,p4,p5))
+p55 <- det(P55)/det(P5)
+p55
+```
+
+## 2.3
+
+```{r}
+PACF <- function(serie,k){
+  
+  p <- c()
+  
+  
+  
+  m.pk <- diag(x = k)
+  
+  for (ind in 1:(k-1)) {
+    p[ind] <- round(cor(Xt[-c(1:ind)],Xt[-(rep(length(serie),ind)-0:(ind-1))]),
+                       digits = 3)
+  }
+  
+  
+  
+  for (i in 1:dim(m.pk)[1]) {
+    for (j in 1:dim(m.pk)[2]) {
+      if(j>i){
+        m.pk[i,j] <- p[j-i]
+      }
+    }
+  }
+  
+  
+  m.pk <- t(m.pk)
+  
+  
+  for (i in 1:dim(m.pk)[1]) {
+    for (j in 1:dim(m.pk)[2]) {
+      if(j>i){
+        m.pk[i,j] <- p[j-i]
+      }
+    }
+  }
+  
+  
+  pk <- round(cor(Xt[-c(1:k)],Xt[-(rep(length(serie),k)-0:(k-1))]),digits = 3)
+  m.pkk <- cbind(m.pk[,-k],c(p,pk))
+  
+  
+  return(det(m.pkk)/det(m.pk))
+}
+
+PACF(serie = Xt, k=2)
+```
+

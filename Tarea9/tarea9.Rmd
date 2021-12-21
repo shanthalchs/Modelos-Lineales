@@ -11,7 +11,7 @@ output:
   pdf_document:
     toc: yes
 editor_options:
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 
@@ -775,7 +775,7 @@ yth(t =1)
 ```
 
 
-# 5. __[20 puntos]__ (__Suavizado exponencial simple__) Se tienen $x_1 , ... , x_n $ y se desea pronosticar (predecir) $x_{n+h}$ con $h \in \mathbb{N}$  y donde $\hat{x}_{n,h}$ denota la predicción de $x_{n+h}$. Para $\alpha \in  ]0;1[$ , se define la
+# 5. __[20 puntos]__ (__Suavizado exponencial simple__) Se tienen $x_1 , ... , x_n$ y se desea pronosticar (predecir) $x_{n+h}$ con $h \in \mathbb{N}$  y donde $\hat{x}_{n,h}$ denota la predicción de $x_{n+h}$. Para $\alpha \in  ]0;1[$ , se define la
 predicción por suavizado exponencial simple como sigue:
 
 $$
@@ -791,3 +791,9 @@ Pruebe que la predicción $\hat{x}_{n,h}$ es asintóticamente la solución de:
 $$
 \hat{x}_{n,h} = arg_{x} mín \sum_{j=0}^{n-1} (1-\alpha)^j (x_{n-j} - x)^2
 $$
+
+
+__Solución:__
+
+![](captura0.jpeg)
+![](captura1.jpeg)
